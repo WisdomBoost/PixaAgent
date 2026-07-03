@@ -1,0 +1,60 @@
+{
+  "models": [
+    {
+      "id": "glm",
+      "label": "GLM 5.2 (OpenRouter)",
+      "provider": "openrouter",
+      "slug": "z-ai/glm-5.2",
+      "contextWindow": 200000,
+      "supportsTools": true
+    },
+    {
+      "id": "glm-free",
+      "label": "GLM 4.5 Air — Free (OpenRouter)",
+      "provider": "openrouter",
+      "slug": "z-ai/glm-4.5-air:free",
+      "contextWindow": 128000,
+      "supportsTools": true
+    },
+    {
+      "id": "qwen",
+      "label": "Qwen3 Coder (OpenRouter)",
+      "provider": "openrouter",
+      "slug": "qwen/qwen3-coder",
+      "contextWindow": 262144,
+      "supportsTools": true
+    },
+    {
+      "id": "deepseek",
+      "label": "DeepSeek V3.1 (OpenRouter)",
+      "provider": "openrouter",
+      "slug": "deepseek/deepseek-chat-v3.1",
+      "contextWindow": 163840,
+      "supportsTools": true
+    },
+    {
+      "id": "claude",
+      "label": "Claude Sonnet (OpenRouter)",
+      "provider": "openrouter",
+      "slug": "anthropic/claude-sonnet-4.5",
+      "contextWindow": 1000000,
+      "supportsTools": true
+    },
+    {
+      "id": "gpt",
+      "label": "GPT-5 (OpenRouter)",
+      "provider": "openrouter",
+      "slug": "openai/gpt-5",
+      "contextWindow": 400000,
+      "supportsTools": true
+    },
+    {
+      "id": "gemini",
+      "label": "Gemini 2.5 Pro (OpenRouter)",
+      "provider": "openrouter",
+      "slug": "google/gemini-2.5-pro",
+      "contextWindow": 1048576,
+      "supportsTools": true
+    }
+  ]
+}
