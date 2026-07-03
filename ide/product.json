@@ -1,0 +1,28 @@
+{
+  "nameShort": "Pixa IDE",
+  "nameLong": "Pixa IDE — AI-first development environment",
+  "applicationName": "pixa",
+  "dataFolderName": ".pixa",
+  "win32MutexName": "pixaide",
+  "win32DirName": "Pixa IDE",
+  "win32NameVersion": "Pixa IDE",
+  "win32RegValueName": "PixaIDE",
+  "win32AppUserModelId": "Pixa.PixaIDE",
+  "win32ShellNameShort": "Pixa IDE",
+  "darwinBundleIdentifier": "dev.pixa.ide",
+  "linuxIconName": "pixa-ide",
+  "licenseName": "MIT",
+  "licenseUrl": "https://github.com/pixa/pixa/blob/main/LICENSE",
+  "serverApplicationName": "pixa-server",
+  "serverDataFolderName": ".pixa-server",
+  "tunnelApplicationName": "pixa-tunnel",
+  "urlProtocol": "pixa",
+  "quality": "stable",
+  "extensionsGallery": {
+    "serviceUrl": "https://open-vsx.org/vscode/gallery",
+    "itemUrl": "https://open-vsx.org/vscode/item",
+    "resourceUrlTemplate": "https://open-vsx.org/vscode/unpkg/{publisher}/{name}/{version}/{path}"
+  },
+  "extensionEnabledApiProposals": {},
+  "trustedExtensionAuthAccess": []
+}
