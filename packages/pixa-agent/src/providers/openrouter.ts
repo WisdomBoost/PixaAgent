@@ -102,6 +102,7 @@ export class OpenRouterProvider implements ModelProvider {
       messages: toWire(req.messages),
       stream: true,
       temperature: req.temperature ?? 0.2,
+      max_tokens: req.maxTokens ?? 8192,
       tools: req.tools.length
         ? req.tools.map((t) => ({
             type: "function",

@@ -14,6 +14,8 @@ export interface AgentLoopDeps {
   models: ModelEntry[];
   ctx: ToolContext;
   workspaceInfo: () => Promise<Omit<WorkspaceInfo, "projectMap">>;
+  /** Completion-token cap per request; keeps free/low-balance accounts under their limit. */
+  maxTokens?: () => number;
 }
 
 /**
@@ -48,7 +50,12 @@ export class AgentLoop {
 
         const messages = [system, ...pruneHistory(this.history, budget)];
         const result = await provider.chat(
-          { model: entry.slug, messages, tools: entry.supportsTools ? tools.schemas() : [] },
+          {
+            model: entry.slug,
+            messages,
+            tools: entry.supportsTools ? tools.schemas() : [],
+            maxTokens: this.deps.maxTokens?.(),
+          },
           (d) => {
             if (d.text) ctx.emit({ type: "assistant-delta", text: d.text });
           },

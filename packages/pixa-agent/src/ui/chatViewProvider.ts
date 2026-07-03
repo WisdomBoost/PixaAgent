@@ -67,12 +67,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         workspaceName: path.basename(this.workspaceRoot),
         os: `${os.type()} ${os.release()} (${os.platform()})`,
       }),
+      maxTokens: () => vscode.workspace.getConfiguration("pixa").get<number>("maxTokens") ?? 8192,
     });
   }
 
   private resolveDefaultModelId(): string {
-    const configured = vscode.workspace.getConfiguration("pixa").get<string>("defaultModel") ?? "glm-free";
-    return this.models.some((m) => m.id === configured) ? configured : this.models[0]?.id ?? "glm-free";
+    const configured = vscode.workspace.getConfiguration("pixa").get<string>("defaultModel") ?? "qwen-free";
+    return this.models.some((m) => m.id === configured) ? configured : this.models[0]?.id ?? "qwen-free";
   }
 
   /* ---------- ApprovalService ---------- */
@@ -156,10 +157,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
       case "new-session":
         this.newSession();
         break;
-      case "set-api-key":
+      case "set-api-key": {
         await vscode.commands.executeCommand("pixa.setApiKey");
-        this.post({ type: "status", text: "API key updated." });
+        const hasApiKey = !!(await this.context.secrets.get("pixa.openrouter.apiKey"));
+        this.post({ type: "api-key-status", hasApiKey } as any);
+        if (hasApiKey) this.post({ type: "status", text: "API key updated." });
         break;
+      }
     }
   }
 

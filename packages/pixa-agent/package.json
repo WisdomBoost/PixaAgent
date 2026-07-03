@@ -48,8 +48,13 @@
       "properties": {
         "pixa.defaultModel": {
           "type": "string",
-          "default": "glm-free",
+          "default": "qwen-free",
           "description": "Model id from models.json used by default."
+        },
+        "pixa.maxTokens": {
+          "type": "number",
+          "default": 8192,
+          "description": "Maximum completion tokens per request. Lower this if you hit OpenRouter 402 'requires more credits' errors on a low-balance/free account."
         }
       }
     }

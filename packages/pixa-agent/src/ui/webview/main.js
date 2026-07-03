@@ -70,6 +70,9 @@
         $("api-key-warning").classList.toggle("hidden", msg.hasApiKey);
         break;
       }
+      case "api-key-status":
+        $("api-key-warning").classList.toggle("hidden", msg.hasApiKey);
+        break;
       case "assistant-delta": {
         const el = ensureAssistantEl();
         el.dataset.raw += msg.text;

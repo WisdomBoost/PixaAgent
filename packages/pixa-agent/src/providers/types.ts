@@ -33,6 +33,12 @@ export interface ChatRequest {
   messages: ChatMessage[];
   tools: ToolSchema[];
   temperature?: number;
+  /**
+   * Cap on completion tokens. Important on OpenRouter: without it the provider
+   * reserves the model's full max completion length, which a low/zero balance
+   * cannot afford (HTTP 402).
+   */
+  maxTokens?: number;
 }
 
 export interface StreamDelta {
