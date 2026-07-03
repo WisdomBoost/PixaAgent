@@ -1,0 +1,72 @@
+{
+  "name": "pixa-agent",
+  "displayName": "Pixa Agent",
+  "description": "AI coding agent for Pixa IDE — plans, edits, and runs tasks in your workspace with your approval.",
+  "version": "0.1.0",
+  "publisher": "pixa",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "AI",
+    "Programming Languages"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "pixa",
+          "title": "Pixa Agent",
+          "icon": "media/pixa.svg"
+        }
+      ]
+    },
+    "views": {
+      "pixa": [
+        {
+          "type": "webview",
+          "id": "pixa.chat",
+          "name": "Agent"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "pixa.setApiKey",
+        "title": "Pixa: Set OpenRouter API Key"
+      },
+      {
+        "command": "pixa.newSession",
+        "title": "Pixa: New Agent Session"
+      }
+    ],
+    "configuration": {
+      "title": "Pixa Agent",
+      "properties": {
+        "pixa.defaultModel": {
+          "type": "string",
+          "default": "glm-free",
+          "description": "Model id from models.json used by default."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

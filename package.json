@@ -1,0 +1,14 @@
+{
+  "name": "pixa",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "compile": "npm run compile -w pixa-agent",
+    "watch": "npm run watch -w pixa-agent",
+    "test": "npm run test -w pixa-agent",
+    "typecheck": "npm run typecheck -w pixa-agent"
+  }
+}
