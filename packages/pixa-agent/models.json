@@ -1,11 +1,11 @@
 {
   "models": [
     {
-      "id": "qwen-free",
-      "label": "Qwen3 Coder — Free (OpenRouter)",
+      "id": "gpt-oss-free",
+      "label": "GPT-OSS 120B — Free (OpenRouter)",
       "provider": "openrouter",
-      "slug": "qwen/qwen3-coder:free",
-      "contextWindow": 1048576,
+      "slug": "openai/gpt-oss-120b:free",
+      "contextWindow": 131072,
       "supportsTools": true
     },
     {

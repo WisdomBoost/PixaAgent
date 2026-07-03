@@ -48,7 +48,7 @@
       "properties": {
         "pixa.defaultModel": {
           "type": "string",
-          "default": "qwen-free",
+          "default": "gpt-oss-free",
           "description": "Model id from models.json used by default."
         },
         "pixa.maxTokens": {
