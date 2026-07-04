@@ -8,6 +8,8 @@ import { ChangeSet } from "./edits/changeSet";
 import { WorkspaceIndexer } from "./indexer/workspaceIndexer";
 import { DiffPreview } from "./ui/diffPreview";
 import { ChatViewProvider } from "./ui/chatViewProvider";
+import { McpManager } from "./mcp/manager";
+import type { McpServerConfig } from "./mcp/client";
 
 const API_KEY_SECRET = "pixa.openrouter.apiKey";
 
@@ -49,6 +51,13 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const tools = new ToolRegistry();
   registerBuiltinTools(tools);
+
+  // MCP servers: their tools land in the same registry the agent already uses.
+  const mcpOutput = vscode.window.createOutputChannel("Pixa MCP");
+  const mcpManager = new McpManager((m) => mcpOutput.appendLine(m));
+  const mcpServers = vscode.workspace.getConfiguration("pixa").get<Record<string, McpServerConfig>>("mcpServers") ?? {};
+  void mcpManager.connectAll(mcpServers, tools);
+  context.subscriptions.push(mcpOutput, { dispose: () => mcpManager.dispose() });
 
   const changeSet = new ChangeSet();
   const index = new WorkspaceIndexer(workspaceRoot);

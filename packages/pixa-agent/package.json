@@ -55,6 +55,20 @@
           "type": "number",
           "default": 8192,
           "description": "Maximum completion tokens per request. Lower this if you hit OpenRouter 402 'requires more credits' errors on a low-balance/free account."
+        },
+        "pixa.mcpServers": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "MCP servers whose tools the agent can use. Example: `{ \"filesystem\": { \"command\": \"npx\", \"args\": [\"-y\", \"@modelcontextprotocol/server-filesystem\", \"./\"] } }`. Reload the window after changing.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "command": { "type": "string" },
+              "args": { "type": "array", "items": { "type": "string" } },
+              "env": { "type": "object", "additionalProperties": { "type": "string" } }
+            },
+            "required": ["command"]
+          }
         }
       }
     }
