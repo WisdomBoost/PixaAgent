@@ -80,9 +80,21 @@ npm run test        # vitest: registry, SSE parsing, change set, path jail,
 npm run typecheck
 ```
 
-## Roadmap (v2+)
+## What's in v2 (shipped)
 
-Inline tab completion · embedding/semantic index · MCP client · long-term
+- **Editor context** — the agent sees your open file and selection, like Copilot
+- **@-file mentions** — `@src/server.js` in chat attaches that file
+- **MCP servers** — add tools via the `pixa.mcpServers` setting; they
+  auto-register into the agent (Copilot-parity extensibility)
+- **Diagnostics self-correction** — `get_diagnostics` reads compiler/linter
+  errors so the agent fixes its own mistakes after applying edits
+- **Session persistence** — chat + cost survive window reloads
+- **Revert** — applied changes can be rolled back from the change-set panel
+- **Cost tracking** — OpenRouter's real billed $ per request + session total
+
+## Roadmap (v3+)
+
+Inline tab completion · embedding/semantic index · long-term
 memory · multi-agent workflows · cloud workspaces · enterprise collaboration.
 
 Design docs: [spec](docs/superpowers/specs/2026-07-03-pixa-ide-design.md) ·
