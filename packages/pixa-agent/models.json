@@ -2,17 +2,81 @@
   "models": [
     {
       "id": "gpt-oss-free",
-      "label": "GPT-OSS 120B — Free (OpenRouter)",
+      "label": "GPT-OSS 120B — Free",
       "provider": "openrouter",
       "slug": "openai/gpt-oss-120b:free",
       "contextWindow": 131072,
       "supportsTools": true
     },
     {
+      "id": "qwen-coder-free",
+      "label": "Qwen3 Coder — Free",
+      "provider": "openrouter",
+      "slug": "qwen/qwen3-coder:free",
+      "contextWindow": 1048576,
+      "supportsTools": true
+    },
+    {
+      "id": "nemotron-free",
+      "label": "Nemotron 3 Super 120B — Free",
+      "provider": "openrouter",
+      "slug": "nvidia/nemotron-3-super-120b-a12b:free",
+      "contextWindow": 1000000,
+      "supportsTools": true
+    },
+    {
+      "id": "north-code-free",
+      "label": "Cohere North Mini Code — Free",
+      "provider": "openrouter",
+      "slug": "cohere/north-mini-code:free",
+      "contextWindow": 256000,
+      "supportsTools": true
+    },
+    {
+      "id": "llama-free",
+      "label": "Llama 3.3 70B — Free",
+      "provider": "openrouter",
+      "slug": "meta-llama/llama-3.3-70b-instruct:free",
+      "contextWindow": 131072,
+      "supportsTools": true
+    },
+    {
       "id": "glm",
-      "label": "GLM 5.2 — Paid (OpenRouter)",
+      "label": "GLM 5.2 — Paid",
       "provider": "openrouter",
       "slug": "z-ai/glm-5.2",
+      "contextWindow": 1048576,
+      "supportsTools": true
+    },
+    {
+      "id": "deepseek",
+      "label": "DeepSeek V3.1 — Paid (budget)",
+      "provider": "openrouter",
+      "slug": "deepseek/deepseek-chat-v3.1",
+      "contextWindow": 163840,
+      "supportsTools": true
+    },
+    {
+      "id": "claude",
+      "label": "Claude Sonnet 5 — Paid",
+      "provider": "openrouter",
+      "slug": "anthropic/claude-sonnet-5",
+      "contextWindow": 1000000,
+      "supportsTools": true
+    },
+    {
+      "id": "gpt-codex",
+      "label": "GPT-5.2 Codex — Paid",
+      "provider": "openrouter",
+      "slug": "openai/gpt-5.2-codex",
+      "contextWindow": 400000,
+      "supportsTools": true
+    },
+    {
+      "id": "gemini",
+      "label": "Gemini 2.5 Pro — Paid",
+      "provider": "openrouter",
+      "slug": "google/gemini-2.5-pro",
       "contextWindow": 1048576,
       "supportsTools": true
     }

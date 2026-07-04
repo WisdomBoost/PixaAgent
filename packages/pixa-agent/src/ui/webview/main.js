@@ -30,13 +30,39 @@
     return html.replace(/\n/g, "<br>");
   }
 
+  const welcomeEl = $("welcome");
+
+  function clearMessages() {
+    messagesEl.innerHTML = "";
+    messagesEl.appendChild(welcomeEl);
+    welcomeEl.classList.remove("hidden");
+  }
+
   function addMessage(cls, html) {
-    const el = document.createElement("div");
-    el.className = "msg " + cls;
-    el.innerHTML = html;
-    messagesEl.appendChild(el);
+    welcomeEl.classList.add("hidden");
+    const wrap = document.createElement("div");
+    wrap.className = "msg " + cls;
+    if (cls === "user" || cls === "assistant") {
+      const role = document.createElement("div");
+      role.className = "msg-role";
+      role.textContent = cls === "user" ? "You" : "Pixa";
+      wrap.appendChild(role);
+    }
+    const body = document.createElement("div");
+    body.className = "msg-body";
+    body.innerHTML = html;
+    wrap.appendChild(body);
+    messagesEl.appendChild(wrap);
     messagesEl.scrollTop = messagesEl.scrollHeight;
-    return el;
+    return body;
+  }
+
+  function timeAgo(ts) {
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 60) return "just now";
+    if (s < 3600) return Math.floor(s / 60) + "m ago";
+    if (s < 86400) return Math.floor(s / 3600) + "h ago";
+    return Math.floor(s / 86400) + "d ago";
   }
 
   // OpenRouter returns real billed cost, not an estimate; costs are tiny so show more precision below a cent.
@@ -81,16 +107,20 @@
         $("api-key-warning").classList.toggle("hidden", msg.hasApiKey);
         break;
       case "transcript": {
-        messagesEl.innerHTML = "";
+        clearMessages();
         for (const entry of msg.entries) {
           addMessage(entry.role === "user" ? "user" : "assistant", renderMarkdown(entry.text));
         }
         if (typeof msg.sessionCostUsd === "number") {
           $("session-cost").textContent = formatCost(msg.sessionCostUsd);
         }
+        $("history-panel").classList.add("hidden");
         currentAssistantEl = null;
         break;
       }
+      case "sessions":
+        renderSessions(msg.sessions, msg.activeId);
+        break;
       case "assistant-delta": {
         const el = ensureAssistantEl();
         el.dataset.raw += msg.text;
@@ -199,6 +229,32 @@
     }
   }
 
+  function renderSessions(sessions, activeId) {
+    const list = $("history-list");
+    list.innerHTML = "";
+    if (sessions.length === 0) {
+      list.innerHTML = '<div class="history-empty">No chats yet.</div>';
+      return;
+    }
+    for (const s of sessions) {
+      const row = document.createElement("div");
+      row.className = "history-row" + (s.id === activeId ? " active" : "");
+      row.innerHTML =
+        '<div class="history-main"><div class="history-title">' + escapeHtml(s.title) +
+        '</div><div class="history-meta">' + timeAgo(s.updatedAt) +
+        (s.costUsd ? " · " + formatCost(s.costUsd) : "") +
+        '</div></div><button class="history-delete" title="Delete chat">✕</button>';
+      row.querySelector(".history-main").addEventListener("click", () => {
+        vscode.postMessage({ type: "load-session", id: s.id });
+      });
+      row.querySelector(".history-delete").addEventListener("click", (e) => {
+        e.stopPropagation();
+        vscode.postMessage({ type: "delete-session", id: s.id });
+      });
+      list.appendChild(row);
+    }
+  }
+
   /* ---------- user actions ---------- */
 
   function send() {
@@ -223,10 +279,16 @@
     vscode.postMessage({ type: "selectModel", modelId: modelSelect.value })
   );
   $("new-session").addEventListener("click", () => {
-    messagesEl.innerHTML = "";
+    clearMessages();
     $("session-cost").textContent = formatCost(0);
+    $("history-panel").classList.add("hidden");
     vscode.postMessage({ type: "new-session" });
   });
+  $("show-history").addEventListener("click", () => {
+    $("history-panel").classList.toggle("hidden");
+    vscode.postMessage({ type: "list-sessions" });
+  });
+  $("close-history").addEventListener("click", () => $("history-panel").classList.add("hidden"));
   $("apply-all").addEventListener("click", () =>
     vscode.postMessage({ type: "changeset-action", path: null, action: "apply-all" })
   );

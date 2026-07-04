@@ -15,11 +15,21 @@ import { resolveInWorkspace } from "../tools/paths";
 import { parseMentions, formatAttachedFiles, type AttachedFile } from "../agent/mentions";
 import type { ChatMessage } from "../providers/types";
 
-const SESSION_STATE_KEY = "pixa.session.v1";
+const SESSIONS_KEY = "pixa.sessions.v1";
+const MAX_SESSIONS = 30;
 
-interface PersistedSession {
+interface StoredSession {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  costUsd: number;
   history: ChatMessage[];
-  sessionCostUsd: number;
+}
+
+interface SessionStore {
+  sessions: StoredSession[];
+  activeId: string | null;
 }
 
 /** Messages the webview sends to the extension host. */
@@ -31,6 +41,9 @@ type WebviewMessage =
   | { type: "approval-response"; requestId: string; approved: boolean }
   | { type: "changeset-action"; path: string | null; action: "apply" | "reject" | "apply-all" | "open-diff" | "revert" }
   | { type: "new-session" }
+  | { type: "list-sessions" }
+  | { type: "load-session"; id: string }
+  | { type: "delete-session"; id: string }
   | { type: "set-api-key" };
 
 export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalService {
@@ -124,30 +137,116 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
 
   newSession(): void {
     this.abort?.abort();
+    this.saveSession(); // preserve what we're leaving
     this.loop.reset();
     this.changeSet.clearResolved();
-    void this.context.workspaceState.update(SESSION_STATE_KEY, undefined);
-    this.post({ type: "status", text: "New session started." });
+    const store = this.loadStore();
+    store.activeId = null;
+    this.saveStore(store);
+    this.activeSessionId = null;
+    this.post({ type: "transcript", entries: [], sessionCostUsd: 0 } as any);
+    this.postSessions();
   }
 
+  /* ---------- session store (Copilot-style history) ---------- */
+
+  private activeSessionId: string | null = null;
+
+  private loadStore(): SessionStore {
+    const raw = this.context.workspaceState.get<SessionStore>(SESSIONS_KEY);
+    return raw && Array.isArray(raw.sessions) ? raw : { sessions: [], activeId: null };
+  }
+
+  private saveStore(store: SessionStore): void {
+    void this.context.workspaceState.update(SESSIONS_KEY, store);
+  }
+
+  /** Upsert the active session from the loop's current state. */
   private saveSession(): void {
-    const state: PersistedSession = {
+    if (this.loop.history.length === 0) return;
+    const store = this.loadStore();
+    const now = Date.now();
+    if (!this.activeSessionId) this.activeSessionId = crypto.randomUUID();
+    const existing = store.sessions.find((s) => s.id === this.activeSessionId);
+    const title = existing?.title ?? this.deriveTitle();
+    const session: StoredSession = {
+      id: this.activeSessionId,
+      title,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      costUsd: this.loop.sessionCost,
       history: this.loop.history.slice(-200), // bound growth; context manager prunes anyway
-      sessionCostUsd: this.loop.sessionCost,
     };
-    void this.context.workspaceState.update(SESSION_STATE_KEY, state);
+    store.sessions = [session, ...store.sessions.filter((s) => s.id !== session.id)].slice(0, MAX_SESSIONS);
+    store.activeId = session.id;
+    this.saveStore(store);
+    this.postSessions();
   }
 
-  /** Rehydrate the loop and replay a readable transcript into the webview. */
+  private deriveTitle(): string {
+    const firstUser = this.loop.history.find((m) => m.role === "user");
+    const text = (firstUser?.content ?? "New chat").replace(/\n*<attached-files>[\s\S]*<\/attached-files>/, "").trim();
+    return text.slice(0, 48) + (text.length > 48 ? "…" : "") || "New chat";
+  }
+
+  /** Rehydrate the active session and replay its transcript into the webview. */
   private restoreSession(): void {
     if (this.loop.history.length > 0) {
-      this.post({ type: "transcript", entries: this.transcript() } as any);
-      return; // live in-memory session (panel was just hidden, not reloaded)
+      // Live in-memory session — the panel was hidden, not the window reloaded.
+      this.post({ type: "transcript", entries: this.transcript(), sessionCostUsd: this.loop.sessionCost } as any);
+      this.postSessions();
+      return;
     }
-    const saved = this.context.workspaceState.get<PersistedSession>(SESSION_STATE_KEY);
-    if (!saved || !Array.isArray(saved.history) || saved.history.length === 0) return;
-    this.loop.restore(saved.history, saved.sessionCostUsd ?? 0);
+    const store = this.loadStore();
+    const active = store.sessions.find((s) => s.id === store.activeId);
+    if (active) {
+      this.activeSessionId = active.id;
+      this.loop.restore(active.history, active.costUsd ?? 0);
+      this.post({ type: "transcript", entries: this.transcript(), sessionCostUsd: this.loop.sessionCost } as any);
+    }
+    this.postSessions();
+  }
+
+  private switchSession(id: string): void {
+    this.abort?.abort();
+    this.saveSession();
+    const store = this.loadStore();
+    const target = store.sessions.find((s) => s.id === id);
+    if (!target) return;
+    this.activeSessionId = target.id;
+    store.activeId = target.id;
+    this.saveStore(store);
+    this.loop.restore(target.history, target.costUsd ?? 0);
+    this.changeSet.clearResolved();
     this.post({ type: "transcript", entries: this.transcript(), sessionCostUsd: this.loop.sessionCost } as any);
+    this.postSessions();
+  }
+
+  private deleteSession(id: string): void {
+    const store = this.loadStore();
+    store.sessions = store.sessions.filter((s) => s.id !== id);
+    if (store.activeId === id) {
+      store.activeId = null;
+      if (this.activeSessionId === id) {
+        this.activeSessionId = null;
+        this.loop.reset();
+        this.post({ type: "transcript", entries: [], sessionCostUsd: 0 } as any);
+      }
+    }
+    this.saveStore(store);
+    this.postSessions();
+  }
+
+  private postSessions(): void {
+    const store = this.loadStore();
+    this.post({
+      type: "sessions",
+      activeId: this.activeSessionId,
+      sessions: store.sessions
+        .slice()
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .map((s) => ({ id: s.id, title: s.title, updatedAt: s.updatedAt, costUsd: s.costUsd })),
+    } as any);
   }
 
   private transcript(): { role: string; text: string }[] {
@@ -214,6 +313,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         break;
       case "new-session":
         this.newSession();
+        break;
+      case "list-sessions":
+        this.postSessions();
+        break;
+      case "load-session":
+        this.switchSession(msg.id);
+        break;
+      case "delete-session":
+        this.deleteSession(msg.id);
         break;
       case "set-api-key": {
         await vscode.commands.executeCommand("pixa.setApiKey");
@@ -339,9 +447,23 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     <div id="header">
       <select id="model-select" title="Model"></select>
       <span id="session-cost" title="Total spend this session (from OpenRouter usage accounting)">$0.00</span>
-      <button id="new-session" title="New session">＋</button>
+      <button id="show-history" class="icon-btn" title="Chat history">🕘</button>
+      <button id="new-session" class="icon-btn" title="New chat">＋</button>
     </div>
-    <div id="messages"></div>
+    <div id="history-panel" class="hidden">
+      <div id="history-header">
+        <span>Chats</span>
+        <button id="close-history" class="icon-btn" title="Back to chat">✕</button>
+      </div>
+      <div id="history-list"></div>
+    </div>
+    <div id="messages">
+      <div id="welcome">
+        <div class="welcome-title">Pixa Agent</div>
+        <div class="welcome-line">Describe a task — I'll read your code, propose diffs you approve, and run commands only with your permission.</div>
+        <div class="welcome-line dim">Tips: <code>@file.ts</code> attaches a file · select code in the editor before asking about it · switch models from the dropdown above.</div>
+      </div>
+    </div>
     <div id="changeset" class="hidden">
       <div id="changeset-header">
         <span>Proposed changes</span>
