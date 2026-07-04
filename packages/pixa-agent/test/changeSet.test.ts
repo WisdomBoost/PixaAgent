@@ -43,6 +43,17 @@ describe("ChangeSet writes and lifecycle", () => {
     expect(fc.newContent).toBe("export {};\n");
   });
 
+  it("reverts only applied changes", () => {
+    const cs = new ChangeSet();
+    cs.stageWrite("a.ts", "old", "new");
+    cs.markReverted("a.ts"); // still pending — no-op
+    expect(cs.get("a.ts")?.status).toBe("pending");
+    cs.markApplied("a.ts");
+    cs.markReverted("a.ts");
+    expect(cs.get("a.ts")?.status).toBe("reverted");
+    expect(cs.get("a.ts")?.originalContent).toBe("old"); // original retained for the disk restore
+  });
+
   it("lists, applies, rejects, and clears resolved", () => {
     const cs = new ChangeSet();
     cs.stageWrite("a.ts", "old", "new");

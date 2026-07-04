@@ -4,7 +4,7 @@
  * Pure module — no vscode imports — so it stays unit-testable.
  */
 
-export type ChangeStatus = "pending" | "applied" | "rejected";
+export type ChangeStatus = "pending" | "applied" | "rejected" | "reverted";
 
 export interface FileChange {
   path: string;
@@ -71,6 +71,12 @@ export class ChangeSet {
   markRejected(path: string): void {
     const c = this.changes.get(path);
     if (c) c.status = "rejected";
+  }
+
+  /** Only applied changes can revert (their original is what disk held before apply). */
+  markReverted(path: string): void {
+    const c = this.changes.get(path);
+    if (c && c.status === "applied") c.status = "reverted";
   }
 
   /** Drop applied/rejected entries, keeping only pending ones. */

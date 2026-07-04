@@ -21,7 +21,7 @@ type WebviewMessage =
   | { type: "stop" }
   | { type: "selectModel"; modelId: string }
   | { type: "approval-response"; requestId: string; approved: boolean }
-  | { type: "changeset-action"; path: string | null; action: "apply" | "reject" | "apply-all" | "open-diff" }
+  | { type: "changeset-action"; path: string | null; action: "apply" | "reject" | "apply-all" | "open-diff" | "revert" }
   | { type: "new-session" }
   | { type: "set-api-key" };
 
@@ -186,7 +186,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
 
   private async onChangeSetAction(
     relPath: string | null,
-    action: "apply" | "reject" | "apply-all" | "open-diff"
+    action: "apply" | "reject" | "apply-all" | "open-diff" | "revert"
   ): Promise<void> {
     try {
       if (action === "open-diff" && relPath) {
@@ -200,11 +200,27 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
       } else if (relPath) {
         if (action === "apply") await this.applyChange(relPath);
         if (action === "reject") this.changeSet.markRejected(relPath);
+        if (action === "revert") await this.revertChange(relPath);
       }
       this.postChangeSet();
     } catch (e) {
       this.post({ type: "error", message: (e as Error).message });
     }
+  }
+
+  /** Restore an applied file to its pre-apply content (delete it if we created it). */
+  private async revertChange(relPath: string): Promise<void> {
+    const change = this.changeSet.get(relPath);
+    if (!change || change.status !== "applied") return;
+    const abs = resolveInWorkspace(this.workspaceRoot, relPath);
+    const uri = vscode.Uri.file(abs);
+    if (change.originalContent === null) {
+      await vscode.workspace.fs.delete(uri, { useTrash: true });
+    } else {
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(change.originalContent, "utf8"));
+    }
+    this.changeSet.markReverted(relPath);
+    this.diffPreview.invalidate(relPath);
   }
 
   private async applyChange(relPath: string): Promise<void> {

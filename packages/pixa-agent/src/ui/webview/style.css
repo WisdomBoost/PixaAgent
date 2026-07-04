@@ -162,6 +162,7 @@ button:hover { background: var(--vscode-button-hoverBackground); }
 .cs-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--vscode-charts-yellow, #e2b93d); }
 .cs-applied .cs-dot { background: var(--vscode-charts-green, #4caf50); }
 .cs-rejected .cs-dot { background: var(--vscode-charts-red, #f44747); }
+.cs-reverted .cs-dot { background: var(--vscode-descriptionForeground); }
 .cs-path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cs-actions { display: flex; gap: 4px; }
 .cs-actions button { padding: 2px 6px; font-size: 0.85em; }

@@ -173,7 +173,9 @@
       const actions =
         f.status === "pending"
           ? '<button data-a="open-diff">Diff</button><button data-a="apply">Apply</button><button data-a="reject">Reject</button>'
-          : "<em>" + f.status + "</em>";
+          : f.status === "applied"
+            ? '<em>applied</em> <button data-a="revert">Revert</button>'
+            : "<em>" + f.status + "</em>";
       row.innerHTML =
         '<span class="cs-dot"></span><span class="cs-path" title="' + escapeHtml(f.path) + '">' +
         escapeHtml(f.path) + '</span><span class="cs-actions">' + actions + "</span>";
