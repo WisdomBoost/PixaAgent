@@ -8,8 +8,9 @@ import { buildSystemPrompt, type WorkspaceInfo } from "./systemPrompt";
 
 const MAX_ITERATIONS = 30;
 const RESERVE_TOKENS = 8000;
-const MAX_RATE_LIMIT_RETRIES = 3;
-const MAX_RETRY_WAIT_SECONDS = 60;
+// One quick retry per model — persistent 429s trigger a free-model fallback hop instead.
+const MAX_RATE_LIMIT_RETRIES = 1;
+const MAX_RETRY_WAIT_SECONDS = 30;
 
 export interface AgentLoopDeps {
   registry: ProviderRegistry;
@@ -75,7 +76,8 @@ export class AgentLoop {
   async run(userMessage: string, modelId: string, signal: AbortSignal): Promise<void> {
     const { registry, tools, models, ctx } = this.deps;
     try {
-      const { provider, entry } = registry.resolve(modelId, models);
+      let { provider, entry } = registry.resolve(modelId, models);
+      const triedModels = new Set<string>([entry.id]);
       this.history.push({ role: "user", content: userMessage });
 
       const base = await this.deps.workspaceInfo();
@@ -84,25 +86,48 @@ export class AgentLoop {
         role: "system",
         content: buildSystemPrompt({ ...base, projectMap }),
       };
-      const budget = entry.contextWindow - RESERVE_TOKENS;
+      let budget = entry.contextWindow - RESERVE_TOKENS;
 
       for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
         if (signal.aborted) throw abortError();
 
         const messages = [system, ...pruneHistory(this.history, budget)];
-        const result = await this.chatWithRetry(
-          provider,
-          {
-            model: entry.slug,
-            messages,
-            tools: entry.supportsTools ? tools.schemas() : [],
-            maxTokens: this.deps.maxTokens?.(),
-          },
-          (d) => {
-            if (d.text) ctx.emit({ type: "assistant-delta", text: d.text });
-          },
-          signal
-        );
+        let result: ChatResult;
+        try {
+          result = await this.chatWithRetry(
+            provider,
+            {
+              model: entry.slug,
+              messages,
+              tools: entry.supportsTools ? tools.schemas() : [],
+              maxTokens: this.deps.maxTokens?.(),
+            },
+            (d) => {
+              if (d.text) ctx.emit({ type: "assistant-delta", text: d.text });
+            },
+            signal
+          );
+        } catch (e) {
+          // Free pools are per-model: when one is exhausted after retries,
+          // hop to the next free model and continue the same task.
+          if (e instanceof RateLimitError && isFreeModel(entry) && !signal.aborted) {
+            const fallback = models.find(
+              (m) => isFreeModel(m) && m.supportsTools && !triedModels.has(m.id)
+            );
+            if (fallback) {
+              triedModels.add(fallback.id);
+              ({ provider, entry } = registry.resolve(fallback.id, models));
+              budget = entry.contextWindow - RESERVE_TOKENS;
+              ctx.emit({
+                type: "status",
+                text: `"${modelId}" pool is exhausted — switching to ${fallback.label} and continuing.`,
+              });
+              iteration--; // this hop doesn't consume a step
+              continue;
+            }
+          }
+          throw e;
+        }
 
         if (result.usage) {
           const requestCostUsd = result.usage.costUsd;
@@ -173,6 +198,10 @@ function summarizeArgs(argsJson: string): string {
 
 function truncateForUi(s: string): string {
   return s.length > 1500 ? s.slice(0, 1500) + "\n… (truncated in UI — full result sent to model)" : s;
+}
+
+function isFreeModel(entry: ModelEntry): boolean {
+  return entry.slug.endsWith(":free");
 }
 
 /** Cancellable sleep — resolves after ms, or rejects immediately if the signal aborts. */

@@ -1,6 +1,14 @@
 {
   "models": [
     {
+      "id": "nemotron-ultra-free",
+      "label": "Nemotron 3 Ultra 550B — Free",
+      "provider": "openrouter",
+      "slug": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "contextWindow": 1000000,
+      "supportsTools": true
+    },
+    {
       "id": "gpt-oss-free",
       "label": "GPT-OSS 120B — Free",
       "provider": "openrouter",

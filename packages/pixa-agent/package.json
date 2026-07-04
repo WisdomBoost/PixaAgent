@@ -2,7 +2,7 @@
   "name": "pixa-agent",
   "displayName": "Pixa Agent",
   "description": "AI coding agent for Pixa IDE — plans, edits, and runs tasks in your workspace with your approval.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "pixa",
   "license": "MIT",
   "engines": {
@@ -48,7 +48,7 @@
       "properties": {
         "pixa.defaultModel": {
           "type": "string",
-          "default": "gpt-oss-free",
+          "default": "nemotron-ultra-free",
           "description": "Model id from models.json used by default."
         },
         "pixa.maxTokens": {
@@ -63,11 +63,25 @@
           "additionalProperties": {
             "type": "object",
             "properties": {
-              "command": { "type": "string" },
-              "args": { "type": "array", "items": { "type": "string" } },
-              "env": { "type": "object", "additionalProperties": { "type": "string" } }
+              "command": {
+                "type": "string"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
             },
-            "required": ["command"]
+            "required": [
+              "command"
+            ]
           }
         }
       }

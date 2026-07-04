@@ -79,6 +79,35 @@ describe("AgentLoop rate-limit retry", () => {
     expect(events.some((e) => e.type === "error")).toBe(false);
   });
 
+  it("falls back to the next free model when one pool is exhausted", async () => {
+    const modelA: ModelEntry = { id: "a", label: "Free A", provider: "flaky", slug: "x/a:free", contextWindow: 100000, supportsTools: true };
+    const modelB: ModelEntry = { id: "b", label: "Free B", provider: "flaky", slug: "x/b:free", contextWindow: 100000, supportsTools: true };
+    const provider: ModelProvider = {
+      id: "flaky",
+      async chat(req): Promise<ChatResult> {
+        if (req.model === "x/a:free") throw new RateLimitError(0, "pool exhausted");
+        return { content: "done on B", toolCalls: [], finishReason: "stop" };
+      },
+    };
+    const registry = new ProviderRegistry();
+    registry.register(provider);
+    const events: AgentEvent[] = [];
+    const loop = new AgentLoop({
+      registry,
+      tools: new ToolRegistry(),
+      models: [modelA, modelB],
+      ctx: ctx(events),
+      workspaceInfo: async () => ({ workspaceName: "w", os: "os" }),
+    });
+
+    await loop.run("hi", "a", new AbortController().signal);
+
+    expect(events.some((e) => e.type === "status" && /switching to Free B/i.test(e.text))).toBe(true);
+    expect(events.some((e) => e.type === "assistant-done")).toBe(true);
+    expect(events.some((e) => e.type === "error")).toBe(false);
+    expect(loop.history.at(-1)?.content).toBe("done on B");
+  });
+
   it("gives up after the retry cap and surfaces an error", async () => {
     const provider: ModelProvider = {
       id: "flaky",
