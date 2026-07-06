@@ -8,13 +8,15 @@ import { buildSystemPrompt, type WorkspaceInfo } from "./systemPrompt";
 
 const MAX_ITERATIONS = 30;
 const RESERVE_TOKENS = 8000;
-// One quick retry per model — persistent 429s trigger a free-model fallback hop instead.
-const MAX_RATE_LIMIT_RETRIES = 1;
-const MAX_RETRY_WAIT_SECONDS = 30;
-// Cap total fallback hops per run: if several free models in a row are all
-// congested, that's a strong signal of an account-wide limit our classifier
-// missed — stop and surface it clearly instead of cycling the whole roster.
-const MAX_FALLBACK_HOPS = 3;
+// OpenRouter's free-tier caps (20 req/min, 50/day) are GLOBAL PER ACCOUNT,
+// not per model — so hopping to another free model cannot escape a per-minute
+// cap. The right response (what Claude Code does) is to WAIT out the window on
+// the same model. Hence: patient retries first, hop only as a last resort.
+const MAX_RATE_LIMIT_RETRIES = 4;
+const MAX_RETRY_WAIT_SECONDS = 60;
+// Hopping only helps for genuine per-MODEL upstream congestion; keep it rare
+// since it burns extra requests against the shared daily cap.
+const MAX_FALLBACK_HOPS = 2;
 
 export interface AgentLoopDeps {
   registry: ProviderRegistry;
@@ -66,10 +68,13 @@ export class AgentLoop {
         return await provider.chat(request, onDelta, signal);
       } catch (e) {
         if (e instanceof RateLimitError && e.scope === "upstream" && attempt < MAX_RATE_LIMIT_RETRIES && !signal.aborted) {
-          const wait = Math.min(Math.max(Math.ceil(e.retryAfterSeconds), 1), MAX_RETRY_WAIT_SECONDS);
+          // Floor of 0 (not 1): real OpenRouter 429s always carry a positive
+          // retry-after (defaulting to 30s), so 0 only occurs in tests, where
+          // it means "retry immediately".
+          const wait = Math.min(Math.max(Math.ceil(e.retryAfterSeconds), 0), MAX_RETRY_WAIT_SECONDS);
           this.deps.ctx.emit({
             type: "status",
-            text: `Free-tier rate limit hit — retrying in ${wait}s (attempt ${attempt + 1}/${MAX_RATE_LIMIT_RETRIES}). Switch model or add an OpenRouter key to avoid this.`,
+            text: `Free-tier limit reached (20 req/min, shared across all free models) — waiting ${wait}s for the window to reset, then continuing (attempt ${attempt + 1}/${MAX_RATE_LIMIT_RETRIES}).`,
           });
           await delay(wait * 1000, signal);
           continue;

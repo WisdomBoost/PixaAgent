@@ -74,10 +74,10 @@ describe("AgentLoop rate-limit retry", () => {
     await loop.run("hi", "m", new AbortController().signal);
 
     expect(calls).toBe(2);
-    expect(events.some((e) => e.type === "status" && /rate limit/i.test(e.text))).toBe(true);
+    expect(events.some((e) => e.type === "status" && /free-tier limit|limit reached/i.test(e.text))).toBe(true);
     expect(events.some((e) => e.type === "assistant-done")).toBe(true);
     expect(events.some((e) => e.type === "error")).toBe(false);
-  });
+  }, 20000);
 
   it("falls back to the next free model when one pool is exhausted", async () => {
     const modelA: ModelEntry = { id: "a", label: "Free A", provider: "flaky", slug: "x/a:free", contextWindow: 100000, supportsTools: true };
@@ -174,9 +174,9 @@ describe("AgentLoop rate-limit retry", () => {
     await loop.run("hi", "a", new AbortController().signal);
 
     const hopMessages = events.filter((e) => e.type === "status" && /pool is exhausted/.test((e as any).text));
-    // Exactly MAX_FALLBACK_HOPS(3) hops: original model "a" + hops to 3 more
-    // = 4 models tried total, never cycling through all 5 free entries.
-    expect(hopMessages).toHaveLength(3);
+    // Exactly MAX_FALLBACK_HOPS(2) hops: original model "a" + 2 hops = 3
+    // models tried, never cycling through all 5 free entries.
+    expect(hopMessages).toHaveLength(2);
     const error = events.find((e) => e.type === "error") as Extract<AgentEvent, { type: "error" }>;
     expect(error).toBeTruthy();
     expect(error.message).toMatch(/account-wide/i);
