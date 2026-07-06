@@ -49,6 +49,38 @@
       "supportsTools": true
     },
     {
+      "id": "gemma-free",
+      "label": "Gemma 4 31B — Free",
+      "provider": "openrouter",
+      "slug": "google/gemma-4-31b-it:free",
+      "contextWindow": 262144,
+      "supportsTools": true
+    },
+    {
+      "id": "qwen-next-free",
+      "label": "Qwen3 Next 80B — Free",
+      "provider": "openrouter",
+      "slug": "qwen/qwen3-next-80b-a3b-instruct:free",
+      "contextWindow": 262144,
+      "supportsTools": true
+    },
+    {
+      "id": "poolside-free",
+      "label": "Poolside Laguna M.1 — Free",
+      "provider": "openrouter",
+      "slug": "poolside/laguna-m.1:free",
+      "contextWindow": 262144,
+      "supportsTools": true
+    },
+    {
+      "id": "router-free",
+      "label": "OpenRouter Free-Model Router",
+      "provider": "openrouter",
+      "slug": "openrouter/free",
+      "contextWindow": 200000,
+      "supportsTools": true
+    },
+    {
       "id": "glm",
       "label": "GLM 5.2 — Paid",
       "provider": "openrouter",
