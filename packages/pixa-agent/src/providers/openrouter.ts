@@ -148,7 +148,8 @@ export class OpenRouterProvider implements ModelProvider {
       throw new RateLimitError(
         parseRetryAfter(res.headers.get("retry-after"), text),
         friendlyError(429, text),
-        classifyRateLimit(text)
+        classifyRateLimit(text),
+        text
       );
     }
     if (!res.ok || !res.body) {
@@ -184,7 +185,8 @@ export class OpenRouterProvider implements ModelProvider {
             throw new RateLimitError(
               Number(parsed.error.metadata?.retry_after_seconds) || 30,
               friendlyError(429, raw),
-              classifyRateLimit(raw)
+              classifyRateLimit(raw),
+              raw
             );
           }
           throw new Error(`OpenRouter: ${parsed.error.message ?? JSON.stringify(parsed.error)}`);

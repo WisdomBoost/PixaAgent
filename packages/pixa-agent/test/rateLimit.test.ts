@@ -108,6 +108,81 @@ describe("AgentLoop rate-limit retry", () => {
     expect(loop.history.at(-1)?.content).toBe("done on B");
   });
 
+  it("names the model that actually just failed in each hop, not the original pick", async () => {
+    const a: ModelEntry = { id: "a", label: "Free A", provider: "flaky", slug: "x/a:free", contextWindow: 1e5, supportsTools: true };
+    const b: ModelEntry = { id: "b", label: "Free B", provider: "flaky", slug: "x/b:free", contextWindow: 1e5, supportsTools: true };
+    const c: ModelEntry = { id: "c", label: "Free C", provider: "flaky", slug: "x/c:free", contextWindow: 1e5, supportsTools: true };
+    const provider: ModelProvider = {
+      id: "flaky",
+      async chat(req): Promise<ChatResult> {
+        if (req.model === "x/c:free") return { content: "done", toolCalls: [], finishReason: "stop" };
+        throw new RateLimitError(0, "pool exhausted");
+      },
+    };
+    const registry = new ProviderRegistry();
+    registry.register(provider);
+    const events: AgentEvent[] = [];
+    const loop = new AgentLoop({
+      registry,
+      tools: new ToolRegistry(),
+      models: [a, b, c],
+      ctx: ctx(events),
+      workspaceInfo: async () => ({ workspaceName: "w", os: "os" }),
+    });
+
+    await loop.run("hi", "a", new AbortController().signal);
+
+    const hopMessages = events
+      .filter((e): e is Extract<AgentEvent, { type: "status" }> => e.type === "status" && /pool is exhausted/.test(e.text))
+      .map((e) => e.text);
+    // The first hop must blame "Free A" (what actually just failed) — the
+    // original bug always blamed whatever `modelId` was passed to run(),
+    // which never changes across hops.
+    expect(hopMessages[0]).toMatch(/"Free A" pool is exhausted/);
+    // If a second hop happens it must blame the model that failed THAT time
+    // (Free B), never re-blame Free A again.
+    if (hopMessages[1]) expect(hopMessages[1]).toMatch(/"Free B" pool is exhausted/);
+    expect(events.some((e) => e.type === "error")).toBe(false);
+  });
+
+  it("stops after MAX_FALLBACK_HOPS consecutive failures and surfaces the raw provider text", async () => {
+    const free: ModelEntry[] = ["a", "b", "c", "d", "e"].map((id) => ({
+      id,
+      label: `Free ${id.toUpperCase()}`,
+      provider: "flaky",
+      slug: `x/${id}:free`,
+      contextWindow: 1e5,
+      supportsTools: true,
+    }));
+    const provider: ModelProvider = {
+      id: "flaky",
+      async chat(): Promise<ChatResult> {
+        throw new RateLimitError(0, "always busy", "upstream", '{"error":{"message":"synthetic upstream busy"}}');
+      },
+    };
+    const registry = new ProviderRegistry();
+    registry.register(provider);
+    const events: AgentEvent[] = [];
+    const loop = new AgentLoop({
+      registry,
+      tools: new ToolRegistry(),
+      models: free,
+      ctx: ctx(events),
+      workspaceInfo: async () => ({ workspaceName: "w", os: "os" }),
+    });
+
+    await loop.run("hi", "a", new AbortController().signal);
+
+    const hopMessages = events.filter((e) => e.type === "status" && /pool is exhausted/.test((e as any).text));
+    // Exactly MAX_FALLBACK_HOPS(3) hops: original model "a" + hops to 3 more
+    // = 4 models tried total, never cycling through all 5 free entries.
+    expect(hopMessages).toHaveLength(3);
+    const error = events.find((e) => e.type === "error") as Extract<AgentEvent, { type: "error" }>;
+    expect(error).toBeTruthy();
+    expect(error.message).toMatch(/account-wide/i);
+    expect(error.message).toContain("synthetic upstream busy"); // raw text surfaced for diagnosis
+  });
+
   it("does NOT hop models on an account-wide quota — explains instead", async () => {
     const modelA: ModelEntry = { id: "a", label: "Free A", provider: "flaky", slug: "x/a:free", contextWindow: 100000, supportsTools: true };
     const modelB: ModelEntry = { id: "b", label: "Free B", provider: "flaky", slug: "x/b:free", contextWindow: 100000, supportsTools: true };

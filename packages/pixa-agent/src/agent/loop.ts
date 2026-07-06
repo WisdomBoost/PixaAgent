@@ -11,6 +11,10 @@ const RESERVE_TOKENS = 8000;
 // One quick retry per model — persistent 429s trigger a free-model fallback hop instead.
 const MAX_RATE_LIMIT_RETRIES = 1;
 const MAX_RETRY_WAIT_SECONDS = 30;
+// Cap total fallback hops per run: if several free models in a row are all
+// congested, that's a strong signal of an account-wide limit our classifier
+// missed — stop and surface it clearly instead of cycling the whole roster.
+const MAX_FALLBACK_HOPS = 3;
 
 export interface AgentLoopDeps {
   registry: ProviderRegistry;
@@ -78,6 +82,7 @@ export class AgentLoop {
     try {
       let { provider, entry } = registry.resolve(modelId, models);
       const triedModels = new Set<string>([entry.id]);
+      let fallbackHops = 0;
       this.history.push({ role: "user", content: userMessage });
 
       const base = await this.deps.workspaceInfo();
@@ -118,9 +123,13 @@ export class AgentLoop {
             });
             return;
           }
-          // Per-model upstream pool exhausted: hop to the next free model
-          // and continue the same task.
-          if (e instanceof RateLimitError && isFreeModel(entry) && !signal.aborted) {
+          // Per-model upstream pool exhausted: hop to the next free model and
+          // continue the same task — but only a few times. Several
+          // back-to-back hops all failing is a strong signal this is really
+          // the account-wide cap and our classifier just didn't match its
+          // wording; cycling the whole roster in that case only wastes time.
+          if (e instanceof RateLimitError && isFreeModel(entry) && !signal.aborted && fallbackHops < MAX_FALLBACK_HOPS) {
+            const failedLabel = entry.label;
             const candidates = models.filter((m) => isFreeModel(m) && m.supportsTools && !triedModels.has(m.id));
             // Randomized, not list-order: otherwise the first free entry in
             // models.json becomes a permanent fallback magnet regardless of
@@ -128,15 +137,27 @@ export class AgentLoop {
             const fallback = candidates[Math.floor(Math.random() * candidates.length)];
             if (fallback) {
               triedModels.add(fallback.id);
+              fallbackHops++;
               ({ provider, entry } = registry.resolve(fallback.id, models));
               budget = entry.contextWindow - RESERVE_TOKENS;
               ctx.emit({
                 type: "status",
-                text: `"${modelId}" pool is exhausted — switching to ${fallback.label} and continuing.`,
+                text: `"${failedLabel}" pool is exhausted — switching to ${fallback.label} and continuing.`,
               });
               iteration--; // this hop doesn't consume a step
               continue;
             }
+          }
+          if (e instanceof RateLimitError) {
+            ctx.emit({
+              type: "error",
+              message: `${e.message}${
+                fallbackHops >= MAX_FALLBACK_HOPS
+                  ? ` (gave up after ${fallbackHops} free-model hops — this looks account-wide, not per-model; try a paid model like GLM 5.2)`
+                  : ""
+              }${e.raw ? `\nRaw provider response: ${e.raw.slice(0, 500)}` : ""}`,
+            });
+            return;
           }
           throw e;
         }

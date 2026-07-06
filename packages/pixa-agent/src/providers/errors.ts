@@ -7,7 +7,9 @@ export class RateLimitError extends Error {
   constructor(
     public retryAfterSeconds: number,
     message: string,
-    public scope: "upstream" | "account" = "upstream"
+    public scope: "upstream" | "account" = "upstream",
+    /** Untouched response body, kept so misclassifications are debuggable from the raw text. */
+    public raw: string = ""
   ) {
     super(message);
     this.name = "RateLimitError";
