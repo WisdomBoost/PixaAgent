@@ -183,6 +183,42 @@ describe("AgentLoop rate-limit retry", () => {
     expect(error.message).toContain("synthetic upstream busy"); // raw text surfaced for diagnosis
   });
 
+  it("remembers the healthy model and hops straight to it next time, updating the active model", async () => {
+    const picked: ModelEntry = { id: "picked", label: "Picked", provider: "flaky", slug: "x/picked:free", contextWindow: 1e5, supportsTools: true };
+    const good: ModelEntry = { id: "good", label: "Good", provider: "flaky", slug: "x/good:free", contextWindow: 1e5, supportsTools: true };
+    const other: ModelEntry = { id: "other", label: "Other", provider: "flaky", slug: "x/other:free", contextWindow: 1e5, supportsTools: true };
+    const provider: ModelProvider = {
+      id: "flaky",
+      async chat(req): Promise<ChatResult> {
+        if (req.model === "x/good:free") return { content: "ok", toolCalls: [], finishReason: "stop" };
+        throw new RateLimitError(0, "busy"); // picked and other are always congested
+      },
+    };
+    const registry = new ProviderRegistry();
+    registry.register(provider);
+    const events: AgentEvent[] = [];
+    const loop = new AgentLoop({
+      registry,
+      tools: new ToolRegistry(),
+      models: [picked, good, other],
+      ctx: ctx(events),
+      workspaceInfo: async () => ({ workspaceName: "w", os: "os" }),
+    });
+
+    // First run: picked fails, hops (possibly via other) and eventually lands on good.
+    await loop.run("one", "picked", new AbortController().signal);
+    expect(events.some((e) => e.type === "active-model-changed" && (e as any).modelId === "good")).toBe(true);
+    expect(loop.history.at(-1)?.content).toBe("ok");
+
+    // Second run on the same picked model: the single hop must go straight to
+    // the known-good model, so exactly one hop message appears.
+    events.length = 0;
+    await loop.run("two", "picked", new AbortController().signal);
+    const hopMessages = events.filter((e) => e.type === "status" && /pool is exhausted/.test((e as any).text));
+    expect(hopMessages).toHaveLength(1);
+    expect((hopMessages[0] as any).text).toMatch(/switching to Good/);
+  });
+
   it("does NOT hop models on an account-wide quota — explains instead", async () => {
     const modelA: ModelEntry = { id: "a", label: "Free A", provider: "flaky", slug: "x/a:free", contextWindow: 100000, supportsTools: true };
     const modelB: ModelEntry = { id: "b", label: "Free B", provider: "flaky", slug: "x/b:free", contextWindow: 100000, supportsTools: true };

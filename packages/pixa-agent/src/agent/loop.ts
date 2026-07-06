@@ -33,6 +33,8 @@ export interface AgentLoopDeps {
 export class AgentLoop {
   readonly history: ChatMessage[] = [];
   private sessionCostUsd = 0;
+  /** Last free model that actually served a response — preferred fallback target. */
+  private lastHealthyModelId: string | null = null;
 
   constructor(private deps: AgentLoopDeps) {}
 
@@ -83,6 +85,7 @@ export class AgentLoop {
       let { provider, entry } = registry.resolve(modelId, models);
       const triedModels = new Set<string>([entry.id]);
       let fallbackHops = 0;
+      let notifiedModelChange = false;
       this.history.push({ role: "user", content: userMessage });
 
       const base = await this.deps.workspaceInfo();
@@ -131,10 +134,11 @@ export class AgentLoop {
           if (e instanceof RateLimitError && isFreeModel(entry) && !signal.aborted && fallbackHops < MAX_FALLBACK_HOPS) {
             const failedLabel = entry.label;
             const candidates = models.filter((m) => isFreeModel(m) && m.supportsTools && !triedModels.has(m.id));
-            // Randomized, not list-order: otherwise the first free entry in
-            // models.json becomes a permanent fallback magnet regardless of
-            // what the user actually picked.
-            const fallback = candidates[Math.floor(Math.random() * candidates.length)];
+            // Prefer the model that last served a response this session — it
+            // has proven free capacity, so we skip re-trying other congested
+            // pools. Fall back to a random pick when there's no known-good one.
+            const knownGood = candidates.find((m) => m.id === this.lastHealthyModelId);
+            const fallback = knownGood ?? candidates[Math.floor(Math.random() * candidates.length)];
             if (fallback) {
               triedModels.add(fallback.id);
               fallbackHops++;
@@ -160,6 +164,18 @@ export class AgentLoop {
             return;
           }
           throw e;
+        }
+
+        // A response came back: this model has free capacity right now.
+        if (isFreeModel(entry) && this.lastHealthyModelId !== entry.id) {
+          this.lastHealthyModelId = entry.id;
+        }
+        // If we ended up on a different model than the user picked, move their
+        // selection to the working one so the next message starts there and
+        // doesn't repeat the whole hop dance.
+        if (entry.id !== modelId && !notifiedModelChange) {
+          notifiedModelChange = true;
+          ctx.emit({ type: "active-model-changed", modelId: entry.id });
         }
 
         if (result.usage) {

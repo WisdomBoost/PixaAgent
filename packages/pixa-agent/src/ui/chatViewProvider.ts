@@ -78,7 +78,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
           return null;
         }
       },
-      emit: (event: AgentEvent) => this.post(event),
+      emit: (event: AgentEvent) => {
+        // Keep the host's selection in sync when the loop auto-switches to a
+        // working model, so the next message starts there directly.
+        if (event.type === "active-model-changed") {
+          this.currentModelId = event.modelId;
+        }
+        this.post(event);
+      },
     };
     this.loop = new AgentLoop({
       registry: this.registry,

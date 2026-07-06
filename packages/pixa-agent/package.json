@@ -2,7 +2,7 @@
   "name": "pixa-agent",
   "displayName": "Pixa Agent",
   "description": "AI coding agent for Pixa IDE — plans, edits, and runs tasks in your workspace with your approval.",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "publisher": "pixa",
   "license": "MIT",
   "engines": {

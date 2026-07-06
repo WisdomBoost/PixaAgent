@@ -121,6 +121,9 @@
       case "sessions":
         renderSessions(msg.sessions, msg.activeId);
         break;
+      case "active-model-changed":
+        modelSelect.value = msg.modelId;
+        break;
       case "assistant-delta": {
         const el = ensureAssistantEl();
         el.dataset.raw += msg.text;
