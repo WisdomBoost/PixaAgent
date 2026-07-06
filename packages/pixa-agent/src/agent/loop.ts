@@ -121,9 +121,11 @@ export class AgentLoop {
           // Per-model upstream pool exhausted: hop to the next free model
           // and continue the same task.
           if (e instanceof RateLimitError && isFreeModel(entry) && !signal.aborted) {
-            const fallback = models.find(
-              (m) => isFreeModel(m) && m.supportsTools && !triedModels.has(m.id)
-            );
+            const candidates = models.filter((m) => isFreeModel(m) && m.supportsTools && !triedModels.has(m.id));
+            // Randomized, not list-order: otherwise the first free entry in
+            // models.json becomes a permanent fallback magnet regardless of
+            // what the user actually picked.
+            const fallback = candidates[Math.floor(Math.random() * candidates.length)];
             if (fallback) {
               triedModels.add(fallback.id);
               ({ provider, entry } = registry.resolve(fallback.id, models));
