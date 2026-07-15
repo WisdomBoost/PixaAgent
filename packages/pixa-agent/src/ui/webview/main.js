@@ -124,6 +124,12 @@
       case "active-model-changed":
         modelSelect.value = msg.modelId;
         break;
+      case "plan": {
+        const items = msg.steps.map((s) => "<li>" + escapeHtml(s.text) + "</li>").join("");
+        addMessage("plan", '<div class="plan-title">Plan</div><ol class="plan-steps">' + items + "</ol>");
+        currentAssistantEl = null;
+        break;
+      }
       case "assistant-delta": {
         const el = ensureAssistantEl();
         el.dataset.raw += msg.text;

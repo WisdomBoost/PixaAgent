@@ -149,6 +149,24 @@ button:hover { background: var(--vscode-button-hoverBackground); }
 .msg-body { line-height: 1.5; }
 .msg.status { color: var(--vscode-descriptionForeground); font-style: italic; font-size: 0.9em; }
 .msg.cost { color: var(--vscode-descriptionForeground); font-size: 0.8em; padding: 0 8px; }
+
+/* Plan pre-pass: the agent's intended steps, shown before it starts working. */
+.msg.plan {
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-left: 2px solid var(--vscode-focusBorder);
+  border-radius: 6px;
+}
+.plan-title {
+  font-size: 0.72em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: 4px;
+}
+.plan-steps { margin: 0; padding-left: 22px; }
+.plan-steps li { margin: 2px 0; }
 .msg.error {
   background: var(--vscode-inputValidation-errorBackground, rgba(200,0,0,0.15));
   border: 1px solid var(--vscode-inputValidation-errorBorder, #c00);
