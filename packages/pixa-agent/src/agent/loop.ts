@@ -28,6 +28,12 @@ export interface AgentLoopDeps {
   workspaceInfo: () => Promise<Omit<WorkspaceInfo, "projectMap">>;
   /** Completion-token cap per request; keeps free/low-balance accounts under their limit. */
   maxTokens?: () => number;
+  /**
+   * Called after each tool-calling iteration so the host can persist progress
+   * mid-task. Without it, a reload/crash during a long task loses every tool
+   * result gathered so far.
+   */
+  onCheckpoint?: () => void;
 }
 
 /**
@@ -247,6 +253,10 @@ export class AgentLoop {
             files: ctx.changeSet.list().map((f) => ({ path: f.path, status: f.status })),
           });
         }
+
+        // History is consistent here (assistant turn + all its tool results),
+        // so it's the safe point to persist progress for a long-running task.
+        this.deps.onCheckpoint?.();
       }
 
       ctx.emit({

@@ -112,6 +112,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         };
       },
       maxTokens: () => vscode.workspace.getConfiguration("pixa").get<number>("maxTokens") ?? 8192,
+      // Persist mid-task so a reload/crash during a long run doesn't discard
+      // the work already done.
+      onCheckpoint: () => this.saveSession(),
     });
   }
 
