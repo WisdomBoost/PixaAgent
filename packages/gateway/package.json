@@ -16,6 +16,7 @@
         "node": ">=18.0.0"
     },
     "dependencies": {
+        "better-sqlite3": "^11.8.1",
         "dotenv": "^16.6.1",
         "express": "^4.22.2"
     },
@@ -26,6 +27,7 @@
     "author": "",
     "license": "ISC",
     "devDependencies": {
+        "@types/better-sqlite3": "^7.6.12",
         "@types/express": "^5.0.6",
         "@types/node": "^20.19.43",
         "tsx": "^4.23.1",

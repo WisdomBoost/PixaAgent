@@ -4,3 +4,5 @@ node_modules/
 *.db-journal
 npm-debug.log*
 .DS_Store
+data/*.db
+data/*.db-*
