@@ -100,11 +100,11 @@
           if (m.id === msg.currentModelId) opt.selected = true;
           modelSelect.appendChild(opt);
         }
-        $("api-key-warning").classList.toggle("hidden", msg.hasApiKey);
+        $("api-key-warning").classList.toggle("hidden", msg.hasGatewayToken);
         break;
       }
-      case "api-key-status":
-        $("api-key-warning").classList.toggle("hidden", msg.hasApiKey);
+      case "gateway-token-status":
+        $("api-key-warning").classList.toggle("hidden", msg.hasGatewayToken);
         break;
       case "transcript": {
         clearMessages();
@@ -303,7 +303,7 @@
   );
   $("set-key-link").addEventListener("click", (e) => {
     e.preventDefault();
-    vscode.postMessage({ type: "set-api-key" });
+    vscode.postMessage({ type: "set-gateway-token" });
   });
 
   vscode.postMessage({ type: "ready" });

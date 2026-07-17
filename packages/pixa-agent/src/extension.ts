@@ -14,8 +14,7 @@ import { DiffPreview } from "./ui/diffPreview";
 import { ChatViewProvider } from "./ui/chatViewProvider";
 import { McpManager } from "./mcp/manager";
 import type { McpServerConfig } from "./mcp/client";
-
-const API_KEY_SECRET = "pixa.openrouter.apiKey";
+import { DEFAULT_GATEWAY_URL, GATEWAY_TOKEN_SECRET } from "./config";
 
 async function hidePixaFolderFromExplorer(workspaceRoot: string): Promise<void> {
   const folder = vscode.workspace.workspaceFolders?.find((f) => f.uri.fsPath === workspaceRoot);
@@ -23,6 +22,11 @@ async function hidePixaFolderFromExplorer(workspaceRoot: string): Promise<void> 
   const current = config.get<Record<string, boolean>>("exclude") ?? {};
   if (current[".pixa"] === true) return;
   await config.update("exclude", { ...current, ".pixa": true }, vscode.ConfigurationTarget.WorkspaceFolder);
+}
+
+function resolveGatewayUrl(): string {
+  const configured = vscode.workspace.getConfiguration("pixa").get<string>("gatewayUrl")?.trim();
+  return configured || DEFAULT_GATEWAY_URL;
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -36,15 +40,15 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(statusBar);
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("pixa.setApiKey", async () => {
-      const key = await vscode.window.showInputBox({
-        prompt: "Enter your OpenRouter API key (stored in VS Code secret storage)",
+    vscode.commands.registerCommand("pixa.setGatewayToken", async () => {
+      const token = await vscode.window.showInputBox({
+        prompt: "Enter your Pixa gateway auth token (stored in VS Code secret storage)",
         password: true,
         ignoreFocusOut: true,
       });
-      if (key) {
-        await context.secrets.store(API_KEY_SECRET, key.trim());
-        void vscode.window.showInformationMessage("Pixa: OpenRouter API key saved.");
+      if (token) {
+        await context.secrets.store(GATEWAY_TOKEN_SECRET, token.trim());
+        void vscode.window.showInformationMessage("Pixa: gateway token saved.");
       }
     })
   );
@@ -67,8 +71,19 @@ export function activate(context: vscode.ExtensionContext): void {
   const modelsPath = path.join(context.extensionPath, "dist", "models.json");
   const models = loadModels(fs.readFileSync(modelsPath, "utf8"));
   const providers = new ProviderRegistry();
-  providers.register(new OpenRouterProvider(() => context.secrets.get(API_KEY_SECRET) as Promise<string | undefined>));
+  const openRouter = new OpenRouterProvider(resolveGatewayUrl(), () =>
+    context.secrets.get(GATEWAY_TOKEN_SECRET) as Promise<string | undefined>
+  );
+  providers.register(openRouter);
   providers.register(new LocalEmbeddingsProvider());
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration("pixa.gatewayUrl")) {
+        openRouter.setGatewayUrl(resolveGatewayUrl());
+      }
+    })
+  );
 
   fs.mkdirSync(context.globalStorageUri.fsPath, { recursive: true });
   initEmbeddingCache(context.globalStorageUri.fsPath);

@@ -14,6 +14,7 @@ import { DiffPreview } from "./diffPreview";
 import { resolveInWorkspace } from "../tools/paths";
 import { parseMentions, formatAttachedFiles, type AttachedFile } from "../agent/mentions";
 import type { ChatMessage } from "../providers/types";
+import { GATEWAY_TOKEN_SECRET } from "../config";
 
 const SESSIONS_KEY = "pixa.sessions.v1";
 const MAX_SESSIONS = 30;
@@ -44,7 +45,7 @@ type WebviewMessage =
   | { type: "list-sessions" }
   | { type: "load-session"; id: string }
   | { type: "delete-session"; id: string }
-  | { type: "set-api-key" };
+  | { type: "set-gateway-token" };
 
 export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalService {
   private view: vscode.WebviewView | undefined;
@@ -270,14 +271,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
   private async onMessage(msg: WebviewMessage): Promise<void> {
     switch (msg.type) {
       case "ready": {
-        const hasApiKey = !!(await this.context.secrets.get("pixa.openrouter.apiKey"));
+        const hasGatewayToken = !!(await this.context.secrets.get(GATEWAY_TOKEN_SECRET));
         this.post({
           type: "init",
           models: this.models
             .filter((m) => m.provider !== "local-embeddings")
             .map((m) => ({ id: m.id, label: m.label })),
           currentModelId: this.currentModelId,
-          hasApiKey,
+          hasGatewayToken,
         } as any);
         this.restoreSession();
         this.postChangeSet();
@@ -333,11 +334,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
       case "delete-session":
         this.deleteSession(msg.id);
         break;
-      case "set-api-key": {
-        await vscode.commands.executeCommand("pixa.setApiKey");
-        const hasApiKey = !!(await this.context.secrets.get("pixa.openrouter.apiKey"));
-        this.post({ type: "api-key-status", hasApiKey } as any);
-        if (hasApiKey) this.post({ type: "status", text: "API key updated." });
+      case "set-gateway-token": {
+        await vscode.commands.executeCommand("pixa.setGatewayToken");
+        const hasGatewayToken = !!(await this.context.secrets.get(GATEWAY_TOKEN_SECRET));
+        this.post({ type: "gateway-token-status", hasGatewayToken } as any);
+        if (hasGatewayToken) this.post({ type: "status", text: "Gateway token updated." });
         break;
       }
     }
@@ -483,7 +484,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     </div>
     <div id="composer">
       <div id="api-key-warning" class="hidden">
-        No API key set. <a href="#" id="set-key-link">Set OpenRouter API key</a>
+        No gateway token set. <a href="#" id="set-key-link">Set gateway token</a>
       </div>
       <textarea id="input" rows="3" placeholder="Describe a task… @file.ts attaches a file (Enter to send, Shift+Enter for newline)"></textarea>
       <div id="composer-actions">

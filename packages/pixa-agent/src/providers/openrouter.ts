@@ -8,8 +8,8 @@ import type {
   UsageInfo,
 } from "./types";
 import { RateLimitError, classifyRateLimit } from "./errors";
+import { DEFAULT_GATEWAY_URL } from "../config";
 
-const API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 /* ---------- pure helpers (unit-tested) ---------- */
 
@@ -104,17 +104,30 @@ function toWire(messages: ChatMessage[]): WireMessage[] {
 export class OpenRouterProvider implements ModelProvider {
   readonly id = "openrouter";
 
-  constructor(private getApiKey: () => Promise<string | undefined>) {}
+  /**
+   * @param gatewayUrl Full URL of the gateway's chat endpoint (e.g. http://localhost:8080/v1/chat
+   *   or https://gateway.company.com/v1/chat). The gateway — not this class — now owns the
+   *   OpenRouter API key and the actual openrouter.ai/... URL.
+   * @param getGatewayToken Resolves the bearer token the gateway expects, if any. Enterprise
+   *   gateways may require this; a local Phase 1 gateway with no auth yet can return undefined.
+   */
+  constructor(
+    private gatewayUrl: string,
+    private getGatewayToken: () => Promise<string | undefined>
+  ) {}
+
+  /** Lets the extension point at a new gateway without recreating the provider (e.g. after the user runs "Pixa: Set Gateway URL"). */
+  setGatewayUrl(url: string): void {
+    this.gatewayUrl = url;
+  }
 
   async chat(
     req: ChatRequest,
     onDelta: (d: StreamDelta) => void,
     signal: AbortSignal
   ): Promise<ChatResult> {
-    const apiKey = await this.getApiKey();
-    if (!apiKey) {
-      throw new Error("No OpenRouter API key set. Run the \"Pixa: Set OpenRouter API Key\" command.");
-    }
+    const url = this.gatewayUrl || DEFAULT_GATEWAY_URL;
+    const gatewayToken = await this.getGatewayToken();
 
     const body = {
       model: req.model,
@@ -144,17 +157,19 @@ export class OpenRouterProvider implements ModelProvider {
           return c.signal;
         })();
 
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://pixa.dev",
+      "X-Title": "Pixa IDE",
+    };
+    if (gatewayToken) headers.Authorization = `Bearer ${gatewayToken}`;
+
     let res: Response;
     try {
-      res = await fetch(API_URL, {
+      res = await fetch(url, {
         method: "POST",
         signal: combinedSignal,
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": "https://pixa.dev",
-          "X-Title": "Pixa IDE",
-        },
+        headers,
         body: JSON.stringify(body),
       });
     } finally {
@@ -276,7 +291,7 @@ export function friendlyError(status: number, body: string): string {
     case 402:
       return `Out of credits for this model: ${base} Lower pixa.maxTokens, switch to a free model, or add credit at openrouter.ai/settings/credits.`;
     case 401:
-      return `Auth failed (401). Re-run "Pixa: Set OpenRouter API Key". ${base}`;
+      return `Auth failed (401). Re-run "Pixa: Set Gateway Token". ${base}`;
     case 404:
       return `Model not found (404): ${base} The slug may be retired — pick another model.`;
     default:
