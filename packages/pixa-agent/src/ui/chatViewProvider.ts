@@ -117,7 +117,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
 
   private resolveDefaultModelId(): string {
     const configured = vscode.workspace.getConfiguration("pixa").get<string>("defaultModel") ?? "nemotron-free";
-    return this.models.some((m) => m.id === configured) ? configured : this.models[0]?.id ?? "nemotron-free";
+    const chatModels = this.models.filter((m) => m.provider !== "local-embeddings");
+    return chatModels.some((m) => m.id === configured) ? configured : chatModels[0]?.id ?? "nemotron-free";
   }
 
   /* ---------- ApprovalService ---------- */
@@ -272,7 +273,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         const hasApiKey = !!(await this.context.secrets.get("pixa.openrouter.apiKey"));
         this.post({
           type: "init",
-          models: this.models.map((m) => ({ id: m.id, label: m.label })),
+          models: this.models
+            .filter((m) => m.provider !== "local-embeddings")
+            .map((m) => ({ id: m.id, label: m.label })),
           currentModelId: this.currentModelId,
           hasApiKey,
         } as any);
@@ -303,7 +306,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         }
         break;
       case "selectModel":
-        if (this.models.some((m) => m.id === msg.modelId)) {
+        if (this.models.some((m) => m.id === msg.modelId && m.provider !== "local-embeddings")) {
           this.currentModelId = msg.modelId;
         }
         break;

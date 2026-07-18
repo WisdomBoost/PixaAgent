@@ -41,6 +41,18 @@
       {
         "command": "pixa.newSession",
         "title": "Pixa: New Agent Session"
+      },
+      {
+        "command": "pixa.rebuildSemanticIndex",
+        "title": "Pixa: Rebuild Semantic Search Index"
+      },
+      {
+        "command": "pixa.debugSemanticSearch",
+        "title": "Pixa: Debug Semantic Search (test query, no LLM)"
+      },
+      {
+        "command": "pixa.runRecallBenchmark",
+        "title": "Pixa: Run Retrieval Recall Benchmark"
       }
     ],
     "configuration": {

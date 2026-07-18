@@ -1,0 +1,45 @@
+/**
+ * Regex-based secret redaction. Applied to chunk text before it's embedded,
+ * since embeddings are computed from raw file content and the indexing
+ * pipeline reads from potentially untrusted repositories.
+ *
+ * This is a starting implementation covering common, high-confidence
+ * patterns. If Phase 1 (Core Engine Hardening) ships a more complete
+ * redaction filter — e.g. one also used for tool-output redaction — swap
+ * it in here so there's a single source of truth for what counts as a
+ * secret across the whole extension.
+ */
+
+interface SecretPattern {
+    name: string;
+    regex: RegExp;
+}
+
+const PATTERNS: SecretPattern[] = [
+    { name: "aws-access-key", regex: /AKIA[0-9A-Z]{16}/g },
+    { name: "aws-secret-key", regex: /(?<=aws_secret_access_key\s*[:=]\s*)['"]?[A-Za-z0-9/+=]{40}['"]?/gi },
+    { name: "openai-key", regex: /sk-[A-Za-z0-9]{20,}/g },
+    { name: "anthropic-key", regex: /sk-ant-[A-Za-z0-9-_]{20,}/g },
+    { name: "github-token", regex: /gh[pousr]_[A-Za-z0-9]{36,}/g },
+    { name: "generic-bearer", regex: /Bearer\s+[A-Za-z0-9\-._~+/]{20,}=*/g },
+    { name: "private-key-block", regex: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g },
+    { name: "jwt", regex: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g },
+    {
+        name: "generic-assigned-secret",
+        // e.g. api_key = "abc123...", password: 'xyz', token=...
+        regex: /(?<=\b(?:api[_-]?key|secret|password|token|access[_-]?key)\s*[:=]\s*)['"][^'"\s]{8,}['"]/gi,
+    },
+];
+
+/**
+ * Replaces detected secrets with a fixed-width placeholder. Deliberately
+ * fixed-width (not length-preserving) so redacted text can't leak the
+ * original secret's length as a side channel.
+ */
+export function redactSecrets(text: string): string {
+    let result = text;
+    for (const { regex } of PATTERNS) {
+        result = result.replace(regex, "[REDACTED]");
+    }
+    return result;
+}

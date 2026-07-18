@@ -10,5 +10,9 @@
     "watch": "npm run watch -w pixa-agent",
     "test": "npm run test -w pixa-agent",
     "typecheck": "npm run typecheck -w pixa-agent"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
+    "vectra": "^0.15.0"
   }
 }

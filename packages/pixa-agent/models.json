@@ -71,6 +71,14 @@
       "slug": "deepseek/deepseek-chat-v3.1",
       "contextWindow": 163840,
       "supportsTools": true
+    },
+    {
+      "id": "qwen3-embedding",
+      "label": "Qwen3 Embedding — Local",
+      "provider": "local-embeddings",
+      "slug": "onnx-community/Qwen3-Embedding-0.6B-ONNX",
+      "contextWindow": 8192,
+      "supportsTools": false
     }
   ]
 }

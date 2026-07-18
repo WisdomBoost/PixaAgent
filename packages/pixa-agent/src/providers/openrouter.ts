@@ -131,17 +131,37 @@ export class OpenRouterProvider implements ModelProvider {
         : undefined,
     };
 
-    const res = await fetch(API_URL, {
-      method: "POST",
-      signal,
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://pixa.dev",
-        "X-Title": "Pixa IDE",
-      },
-      body: JSON.stringify(body),
-    });
+    // Combine the caller's abort signal with a 30-second connect timeout so a
+    // slow or hung external host never blocks the UI indefinitely.
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), 30_000);
+    const combinedSignal = AbortSignal.any
+      ? AbortSignal.any([signal, timeoutController.signal])
+      : (() => {
+          const c = new AbortController();
+          signal.addEventListener("abort", () => c.abort(signal.reason), { once: true });
+          timeoutController.signal.addEventListener("abort", () => c.abort(new Error("Request timed out after 30s — the provider is not responding")), { once: true });
+          return c.signal;
+        })();
+
+    let res: Response;
+    try {
+      res = await fetch(API_URL, {
+        method: "POST",
+        signal: combinedSignal,
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://pixa.dev",
+          "X-Title": "Pixa IDE",
+        },
+        body: JSON.stringify(body),
+      });
+    } finally {
+      // Once we have the response (or an error), the connect phase is done;
+      // cancel the connect timeout so it doesn't fire during the streaming phase.
+      clearTimeout(timeoutId);
+    }
 
     if (res.status === 429) {
       const text = await res.text().catch(() => "");
@@ -166,6 +186,12 @@ export class OpenRouterProvider implements ModelProvider {
     const toolAcc: ToolCallAccumulator = {};
 
     for (;;) {
+      // Respect abort between chunks so Stop takes effect immediately even
+      // if the server keeps the connection open.
+      if (signal.aborted) {
+        await reader.cancel();
+        break;
+      }
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });

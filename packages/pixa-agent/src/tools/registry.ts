@@ -2,6 +2,7 @@ import type { ToolSchema } from "../providers/types";
 import type { Tool, ToolContext } from "./types";
 import { fsTools } from "./fs";
 import { searchTools } from "./search";
+import { memoryTools } from "./memory";
 import { terminalTools } from "./terminal";
 import { gitTools } from "./git";
 import { diagnosticsTools } from "./diagnostics";
@@ -42,7 +43,7 @@ export class ToolRegistry {
 }
 
 export function registerBuiltinTools(reg: ToolRegistry): void {
-  for (const t of [...fsTools, ...searchTools, ...terminalTools, ...gitTools, ...diagnosticsTools]) {
+  for (const t of [...fsTools, ...searchTools, ...memoryTools, ...terminalTools, ...gitTools, ...diagnosticsTools]) {
     reg.register(t);
   }
 }

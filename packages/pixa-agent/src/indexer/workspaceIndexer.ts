@@ -3,10 +3,12 @@ import * as path from "node:path";
 import type { RepoIndex } from "./types";
 import { resolveInWorkspace } from "../tools/paths";
 
-const MAX_FILES = 5000;
+export { isIndexablePath } from "./indexablePaths";
+
+export const MAX_FILES = 5000;
 const MAP_CHAR_CAP = 8000; // ~2000 tokens
 const COLLAPSE_THRESHOLD = 20;
-const EXCLUDE = "**/{node_modules,.git,dist,out,build,.next,coverage,__pycache__,.venv,target}/**";
+export const EXCLUDE = "**/{node_modules,.git,dist,out,build,.next,coverage,__pycache__,.venv,target,.pixa}/**";
 
 /**
  * V1 index backend: fast workspace scan for the project map plus VS Code's
@@ -16,7 +18,7 @@ const EXCLUDE = "**/{node_modules,.git,dist,out,build,.next,coverage,__pycache__
 export class WorkspaceIndexer implements RepoIndex {
   private mapCache: string | null = null;
 
-  constructor(private workspaceRoot: string) {}
+  constructor(private workspaceRoot: string) { }
 
   refresh(): void {
     this.mapCache = null;

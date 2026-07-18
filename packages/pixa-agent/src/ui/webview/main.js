@@ -277,7 +277,13 @@
   }
 
   sendBtn.addEventListener("click", send);
-  stopBtn.addEventListener("click", () => vscode.postMessage({ type: "stop" }));
+  stopBtn.addEventListener("click", () => {
+    // Optimistically flip the UI back to idle immediately so the button
+    // feels responsive — the host will confirm with "run-finished" shortly.
+    setRunning(false);
+    addMessage("status", "Stopping…");
+    vscode.postMessage({ type: "stop" });
+  });
   inputEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();

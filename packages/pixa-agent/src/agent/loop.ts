@@ -254,7 +254,7 @@ export class AgentLoop {
 function summarizeArgs(argsJson: string): string {
   try {
     const args = JSON.parse(argsJson);
-    const interesting = args.path ?? args.command ?? args.regex ?? args.message ?? "";
+    const interesting = args.path ?? args.command ?? args.regex ?? args.query ?? args.message ?? "";
     return typeof interesting === "string" ? interesting.slice(0, 120) : "";
   } catch {
     return "";
