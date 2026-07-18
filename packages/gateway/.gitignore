@@ -6,3 +6,11 @@ npm-debug.log*
 .DS_Store
 data/*.db
 data/*.db-*
+
+.env.local
+dist/
+data/
+
+npm-debug.log*
+.DS_Store
+*.log
