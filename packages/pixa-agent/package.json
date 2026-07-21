@@ -158,6 +158,7 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:offline": "vitest run --exclude \"**/Vector.test.ts\" --exclude \"**/embeddings.test.ts\" --exclude \"**/*.manual.*\"",
     "package": "vsce package --no-dependencies"
   },
   "devDependencies": {

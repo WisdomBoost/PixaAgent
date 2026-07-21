@@ -9,6 +9,7 @@
     "compile": "npm run compile -w pixa-agent",
     "watch": "npm run watch -w pixa-agent",
     "test": "npm run test -w pixa-agent",
+    "test:offline": "npm run test:offline -w pixa-agent",
     "typecheck": "npm run typecheck -w pixa-agent"
   },
   "dependencies": {
