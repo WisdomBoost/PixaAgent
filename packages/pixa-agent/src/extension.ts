@@ -25,6 +25,15 @@ function providerSecretKey(providerId: string): string {
 }
 
 /**
+ * True when indexing failed because the optional local embedding model
+ * (@huggingface/transformers) isn't installed — expected on every fresh
+ * install since it ships unbundled, not a real error.
+ */
+function isMissingOptionalEmbeddingDep(err: any): boolean {
+  return err?.code === "MODULE_NOT_FOUND" && /@huggingface\/transformers/.test(err?.message ?? "");
+}
+
+/**
  * Register a client for every provider the user declared in `pixa.providers`,
  * and return their model entries. Any OpenAI-compatible endpoint works —
  * cloud APIs, a company gateway, or a self-hosted server (Ollama, vLLM,
@@ -183,11 +192,22 @@ export function activate(context: vscode.ExtensionContext): void {
       setTimeout(() => statusBar.hide(), 5000);
     } catch (err: any) {
       log(`Initial index FAILED: ${err?.stack ?? err}`);
-      statusBar.text = "$(error) Pixa: indexing failed";
-      statusBar.tooltip = "See the \"Pixa Index\" output channel for details.";
-      void vscode.window.showErrorMessage(
-        `Pixa: initial semantic index failed — see "Pixa Index" output channel for details. (${err?.message ?? err})`
-      );
+      // @huggingface/transformers ships unbundled (it's 150MB+ with a native
+      // binary) — every fresh install hits this until the user opts in, so
+      // it's expected, not a bug. Don't alarm users with a red popup for it.
+      if (isMissingOptionalEmbeddingDep(err)) {
+        statusBar.text = "$(circle-slash) Pixa: semantic search off";
+        statusBar.tooltip =
+          "Optional local embedding model isn't installed. Chat and editing work normally. " +
+          "See the \"Pixa Index\" output channel for setup steps.";
+        setTimeout(() => statusBar.hide(), 8000);
+      } else {
+        statusBar.text = "$(error) Pixa: indexing failed";
+        statusBar.tooltip = "See the \"Pixa Index\" output channel for details.";
+        void vscode.window.showErrorMessage(
+          `Pixa: initial semantic index failed — see "Pixa Index" output channel for details. (${err?.message ?? err})`
+        );
+      }
     }
   };
   void runInitialIndex();
