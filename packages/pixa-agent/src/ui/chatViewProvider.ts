@@ -585,6 +585,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
       <span id="session-cost" title="Total spend this session (from OpenRouter usage accounting)">$0.00</span>
       <button id="show-history" class="icon-btn" title="Chat history">🕘</button>
       <button id="new-session" class="icon-btn" title="New chat">＋</button>
+      <button id="show-providers" class="icon-btn" title="Providers">⚙</button>
     </div>
     <div id="history-panel" class="hidden">
       <div id="history-header">
@@ -592,6 +593,44 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         <button id="close-history" class="icon-btn" title="Back to chat">✕</button>
       </div>
       <div id="history-list"></div>
+    </div>
+    <div id="providers-panel" class="hidden">
+      <div id="providers-header">
+        <span>Providers</span>
+        <button id="close-providers" class="icon-btn" title="Back to chat">✕</button>
+      </div>
+      <div id="providers-body">
+        <div id="pf-reload-banner" class="hidden">
+          Provider added. <button id="pf-reload-btn">Reload window</button>
+        </div>
+
+        <div class="section-title">Configured</div>
+        <div id="providers-list"></div>
+
+        <div class="section-title">Quick setup</div>
+        <div id="preset-cards"></div>
+
+        <form id="provider-form">
+          <div class="section-title">Add provider</div>
+          <div id="provider-error" class="hidden"></div>
+          <label>Provider ID<input id="pf-id" placeholder="ollama" autocomplete="off"></label>
+          <label>Display name<input id="pf-name" placeholder="Ollama (local)" autocomplete="off"></label>
+          <label>Base URL<input id="pf-baseurl" placeholder="http://localhost:11434/v1" autocomplete="off"></label>
+          <label class="pf-checkbox"><input type="checkbox" id="pf-requires-key"> Requires API key</label>
+          <label id="pf-apikey-row" class="hidden">API key<input id="pf-apikey" type="password" autocomplete="off"></label>
+
+          <div class="section-title">Models</div>
+          <div class="pf-fetch-row">
+            <button type="button" id="pf-fetch-models">Fetch models</button>
+            <span id="pf-fetch-status"></span>
+          </div>
+          <div id="pf-fetched-list"></div>
+          <div id="pf-manual-list"></div>
+          <button type="button" id="pf-add-model-row">+ Add model manually</button>
+
+          <button type="submit" id="pf-submit">Add provider</button>
+        </form>
+      </div>
     </div>
     <div id="messages">
       <div id="welcome">
