@@ -6,7 +6,7 @@ import type { ToolContext } from "../tools/types";
 import { pruneHistory } from "./contextManager";
 import { buildSystemPrompt, type WorkspaceInfo } from "./systemPrompt";
 import { parsePlan } from "./planning";
-import { groupIntoBatches } from "./taskGraph";
+import { groupIntoBatches, looksLikeUnparsedToolCall } from "./taskGraph";
 
 const MAX_ITERATIONS = 30;
 const RESERVE_TOKENS = 8000;
@@ -214,6 +214,19 @@ export class AgentLoop {
         }
 
         if (result.toolCalls.length === 0) {
+          // The model tried to call a tool but wrote it as text — it can't do
+          // real tool calling, so the agent would silently do nothing. Say why.
+          if (entry.supportsTools && looksLikeUnparsedToolCall(result.content)) {
+            ctx.emit({
+              type: "error",
+              message:
+                `"${entry.label}" replied with a tool call written as plain text instead of a real one, ` +
+                `so no action could be taken. This usually means the model is too small for agent work ` +
+                `(models under ~7B often imitate the format without supporting it). ` +
+                `Try a larger model for tasks, or set "supportsTools": false for this model to use it for chat only.`,
+            });
+            return;
+          }
           this.history.push({ role: "assistant", content: result.content });
           ctx.emit({ type: "assistant-done" });
           return;

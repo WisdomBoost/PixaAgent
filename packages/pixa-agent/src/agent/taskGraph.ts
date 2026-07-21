@@ -30,6 +30,23 @@ const PARALLEL_SAFE_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 /** True only for tools known to be read-only. Unknown tools are unsafe by default. */
+/**
+ * True when a model emitted something shaped like a tool call as plain text
+ * instead of using the native tool_calls field.
+ *
+ * Small local models (~1-3B) advertise tool support and then imitate the
+ * *shape* of a call in prose. The agent sees zero tool calls, prints the blob
+ * as its answer, and stops — which reads as "Pixa is broken" rather than
+ * "this model is too small". Detecting it lets us say so plainly.
+ */
+export function looksLikeUnparsedToolCall(content: string): boolean {
+  const t = content.trim();
+  if (!t.startsWith("{") || t.length > 2000) return false;
+  // Match the two shapes these models produce: OpenAI-style {"name":...,
+  // "arguments":...} and the bare {"function":...} variant.
+  return /"(name|function)"\s*:/.test(t) && /"(arguments|parameters)"\s*:/.test(t);
+}
+
 export function isParallelSafe(toolName: string): boolean {
   return PARALLEL_SAFE_TOOLS.has(toolName);
 }

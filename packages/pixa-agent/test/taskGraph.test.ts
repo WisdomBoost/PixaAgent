@@ -1,4 +1,34 @@
 import { describe, it, expect } from "vitest";
+import { looksLikeUnparsedToolCall } from "../src/agent/taskGraph";
+
+/**
+ * Small local models advertise tool support, then write the tool call as prose.
+ * The strings below are REAL observed output: the first from qwen2.5-coder:1.5b
+ * via Ollama, the second from the same model in the chat panel.
+ */
+describe("looksLikeUnparsedToolCall", () => {
+  it("detects the malformed blob a 1.5B model returns", () => {
+    expect(looksLikeUnparsedToolCall('{"name": "", "arguments": {}}')).toBe(true);
+  });
+
+  it("detects a populated but text-only tool call", () => {
+    expect(looksLikeUnparsedToolCall('{"name": "semantic_search", "arguments": {"query": "hello"}}')).toBe(true);
+  });
+
+  it("ignores ordinary prose answers", () => {
+    expect(looksLikeUnparsedToolCall("This project is a VS Code extension.")).toBe(false);
+    expect(looksLikeUnparsedToolCall("")).toBe(false);
+  });
+
+  it("ignores JSON the user legitimately asked for", () => {
+    expect(looksLikeUnparsedToolCall('{"port": 8080, "host": "localhost"}')).toBe(false);
+  });
+
+  it("ignores a long JSON document that merely mentions the keys", () => {
+    const long = '{"name": "x", "arguments": "y", "pad": "' + "z".repeat(2100) + '"}';
+    expect(looksLikeUnparsedToolCall(long)).toBe(false);
+  });
+});
 import { isParallelSafe, groupIntoBatches } from "../src/agent/taskGraph";
 import type { ChatResult, ModelEntry, ModelProvider, ToolCall } from "../src/providers/types";
 import { AgentLoop } from "../src/agent/loop";
