@@ -5,3 +5,6 @@ out/
 .env
 ide/.build/
 ide/vscode/
+
+# Local progress tracker — not for git
+PROGRESS.md
