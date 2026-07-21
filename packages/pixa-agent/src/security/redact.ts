@@ -1,14 +1,3 @@
-/**
- * Regex-based secret redaction. Applied to chunk text before it's embedded,
- * since embeddings are computed from raw file content and the indexing
- * pipeline reads from potentially untrusted repositories.
- *
- * This is a starting implementation covering common, high-confidence
- * patterns. If Phase 1 (Core Engine Hardening) ships a more complete
- * redaction filter — e.g. one also used for tool-output redaction — swap
- * it in here so there's a single source of truth for what counts as a
- * secret across the whole extension.
- */
 
 interface SecretPattern {
     name: string;
@@ -31,11 +20,6 @@ const PATTERNS: SecretPattern[] = [
     },
 ];
 
-/**
- * Replaces detected secrets with a fixed-width placeholder. Deliberately
- * fixed-width (not length-preserving) so redacted text can't leak the
- * original secret's length as a side channel.
- */
 export function redactSecrets(text: string): string {
     let result = text;
     for (const { regex } of PATTERNS) {
