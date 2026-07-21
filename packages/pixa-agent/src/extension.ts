@@ -14,8 +14,51 @@ import { DiffPreview } from "./ui/diffPreview";
 import { ChatViewProvider } from "./ui/chatViewProvider";
 import { McpManager } from "./mcp/manager";
 import type { McpServerConfig } from "./mcp/client";
+import { providersToModels, chatCompletionsUrl, type ProvidersConfig } from "./providers/config";
+import type { ModelEntry } from "./providers/types";
 
 const API_KEY_SECRET = "pixa.openrouter.apiKey";
+
+/** Secret-storage key holding the API key for a user-configured provider. */
+function providerSecretKey(providerId: string): string {
+  return `pixa.provider.${providerId}.apiKey`;
+}
+
+/**
+ * Register a client for every provider the user declared in `pixa.providers`,
+ * and return their model entries. Any OpenAI-compatible endpoint works —
+ * cloud APIs, a company gateway, or a self-hosted server (Ollama, vLLM,
+ * LM Studio). Invalid entries are reported but never block activation.
+ */
+function registerUserProviders(
+  context: vscode.ExtensionContext,
+  registry: ProviderRegistry,
+  log: (msg: string) => void
+): ModelEntry[] {
+  const cfg = vscode.workspace.getConfiguration("pixa").get<ProvidersConfig>("providers") ?? {};
+  const { models, errors } = providersToModels(cfg);
+
+  for (const err of errors) {
+    log(`Provider config: ${err}`);
+    void vscode.window.showWarningMessage(`Pixa: ${err}`);
+  }
+
+  for (const [providerId, provider] of Object.entries(cfg)) {
+    if (!models.some((m) => m.provider === providerId)) continue; // skipped as invalid
+    registry.register(
+      new OpenRouterProvider(() => Promise.resolve(context.secrets.get(providerSecretKey(providerId))), {
+        id: providerId,
+        endpoint: chatCompletionsUrl(provider.baseUrl),
+        requiresApiKey: provider.requiresApiKey !== false,
+        displayName: provider.name?.trim() || providerId,
+      })
+    );
+    log(`Provider "${providerId}" registered -> ${chatCompletionsUrl(provider.baseUrl)}`);
+  }
+
+  if (models.length > 0) log(`Loaded ${models.length} model(s) from user provider config.`);
+  return models;
+}
 
 async function hidePixaFolderFromExplorer(workspaceRoot: string): Promise<void> {
   const folder = vscode.workspace.workspaceFolders?.find((f) => f.uri.fsPath === workspaceRoot);
@@ -46,6 +89,36 @@ export function activate(context: vscode.ExtensionContext): void {
         await context.secrets.store(API_KEY_SECRET, key.trim());
         void vscode.window.showInformationMessage("Pixa: OpenRouter API key saved.");
       }
+    }),
+    // Set a key for any provider declared in `pixa.providers`.
+    vscode.commands.registerCommand("pixa.setProviderApiKey", async () => {
+      const cfg = vscode.workspace.getConfiguration("pixa").get<ProvidersConfig>("providers") ?? {};
+      const ids = Object.keys(cfg);
+      if (ids.length === 0) {
+        void vscode.window.showInformationMessage(
+          'Pixa: no custom providers configured. Add one under the "pixa.providers" setting first.'
+        );
+        return;
+      }
+      const picked = await vscode.window.showQuickPick(
+        ids.map((id) => ({
+          label: cfg[id]?.name?.trim() || id,
+          description: cfg[id]?.baseUrl,
+          detail: cfg[id]?.requiresApiKey === false ? "No API key required (local server)" : undefined,
+          id,
+        })),
+        { placeHolder: "Which provider's API key do you want to set?" }
+      );
+      if (!picked) return;
+      const key = await vscode.window.showInputBox({
+        prompt: `Enter the API key for "${picked.label}" (stored in VS Code secret storage)`,
+        password: true,
+        ignoreFocusOut: true,
+      });
+      if (key) {
+        await context.secrets.store(providerSecretKey(picked.id), key.trim());
+        void vscode.window.showInformationMessage(`Pixa: API key saved for ${picked.label}.`);
+      }
     })
   );
 
@@ -65,9 +138,14 @@ export function activate(context: vscode.ExtensionContext): void {
   void hidePixaFolderFromExplorer(workspaceRoot);
 
   const modelsPath = path.join(context.extensionPath, "dist", "models.json");
-  const models = loadModels(fs.readFileSync(modelsPath, "utf8"));
+  const bundledModels = loadModels(fs.readFileSync(modelsPath, "utf8"));
   const providers = new ProviderRegistry();
-  providers.register(new OpenRouterProvider(() => context.secrets.get(API_KEY_SECRET) as Promise<string | undefined>));
+  providers.register(new OpenRouterProvider(() => Promise.resolve(context.secrets.get(API_KEY_SECRET))));
+
+  // User-declared providers (OpenCode-style) extend the bundled defaults —
+  // any OpenAI-compatible endpoint, including self-hosted models.
+  const userModels = registerUserProviders(context, providers, log);
+  const models = [...bundledModels, ...userModels];
   providers.register(new LocalEmbeddingsProvider());
 
   fs.mkdirSync(context.globalStorageUri.fsPath, { recursive: true });

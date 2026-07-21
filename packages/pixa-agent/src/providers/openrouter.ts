@@ -101,10 +101,34 @@ function toWire(messages: ChatMessage[]): WireMessage[] {
 
 /* ---------- provider ---------- */
 
+/**
+ * OpenAI-compatible chat client.
+ *
+ * Serves OpenRouter by default, but works with ANY OpenAI-compatible endpoint —
+ * NVIDIA NIM, a company gateway, or a self-hosted server (Ollama, vLLM,
+ * LM Studio, llama.cpp) — by passing a different id/endpoint. Local servers
+ * that need no credentials pass `requiresApiKey: false`.
+ */
 export class OpenRouterProvider implements ModelProvider {
-  readonly id = "openrouter";
+  readonly id: string;
+  private endpoint: string;
+  private requiresApiKey: boolean;
+  private displayName: string;
 
-  constructor(private getApiKey: () => Promise<string | undefined>) {}
+  constructor(
+    private getApiKey: () => Promise<string | undefined>,
+    opts: { id?: string; endpoint?: string; requiresApiKey?: boolean; displayName?: string } = {}
+  ) {
+    this.id = opts.id ?? "openrouter";
+    this.endpoint = opts.endpoint ?? API_URL;
+    this.requiresApiKey = opts.requiresApiKey !== false;
+    this.displayName = opts.displayName ?? this.id;
+  }
+
+  /** True when this client talks to OpenRouter itself (enables its extensions). */
+  private get isOpenRouter(): boolean {
+    return this.endpoint === API_URL;
+  }
 
   async chat(
     req: ChatRequest,
@@ -112,17 +136,18 @@ export class OpenRouterProvider implements ModelProvider {
     signal: AbortSignal
   ): Promise<ChatResult> {
     const apiKey = await this.getApiKey();
-    if (!apiKey) {
-      throw new Error("No OpenRouter API key set. Run the \"Pixa: Set OpenRouter API Key\" command.");
+    if (!apiKey && this.requiresApiKey) {
+      throw new Error(
+        `No API key set for "${this.displayName}". Run "Pixa: Set Provider API Key" and choose ${this.id}.`
+      );
     }
 
-    const body = {
+    const body: Record<string, unknown> = {
       model: req.model,
       messages: toWire(req.messages),
       stream: true,
       temperature: req.temperature ?? 0.2,
       max_tokens: req.maxTokens ?? 8192,
-      usage: { include: true },
       tools: req.tools.length
         ? req.tools.map((t) => ({
             type: "function",
@@ -130,6 +155,9 @@ export class OpenRouterProvider implements ModelProvider {
           }))
         : undefined,
     };
+    // Cost accounting is an OpenRouter extension; other OpenAI-compatible
+    // servers may reject unknown fields, so only send it to OpenRouter.
+    if (this.isOpenRouter) body.usage = { include: true };
 
     // Combine the caller's abort signal with a 30-second connect timeout so a
     // slow or hung external host never blocks the UI indefinitely.
@@ -146,14 +174,15 @@ export class OpenRouterProvider implements ModelProvider {
 
     let res: Response;
     try {
-      res = await fetch(API_URL, {
+      res = await fetch(this.endpoint, {
         method: "POST",
         signal: combinedSignal,
         headers: {
-          Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": "https://pixa.dev",
-          "X-Title": "Pixa IDE",
+          // Keyless local servers (Ollama, LM Studio) get no auth header.
+          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+          // OpenRouter-only attribution headers.
+          ...(this.isOpenRouter ? { "HTTP-Referer": "https://pixa.dev", "X-Title": "Pixa IDE" } : {}),
         },
         body: JSON.stringify(body),
       });

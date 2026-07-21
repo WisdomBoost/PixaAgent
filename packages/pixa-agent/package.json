@@ -2,7 +2,7 @@
   "name": "pixa-agent",
   "displayName": "Pixa Agent",
   "description": "AI coding agent for Pixa IDE — plans, edits, and runs tasks in your workspace with your approval.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "pixa",
   "license": "MIT",
   "engines": {
@@ -39,6 +39,10 @@
         "title": "Pixa: Set OpenRouter API Key"
       },
       {
+        "command": "pixa.setProviderApiKey",
+        "title": "Pixa: Set Provider API Key"
+      },
+      {
         "command": "pixa.newSession",
         "title": "Pixa: New Agent Session"
       },
@@ -61,7 +65,57 @@
         "pixa.defaultModel": {
           "type": "string",
           "default": "nemotron-free",
-          "description": "Model id from models.json used by default."
+          "description": "Model id used by default. Built-in ids come from models.json; custom ones are \"provider:model\" (e.g. \"ollama:llama3.1\")."
+        },
+        "pixa.providers": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "Add your own model providers. Works with **any OpenAI-compatible endpoint** — a cloud API, a company gateway, or a self-hosted server (Ollama, vLLM, LM Studio, llama.cpp). After adding one, run **Pixa: Set Provider API Key** (skip for local servers with `requiresApiKey: false`). Models appear in the chat picker as `provider:model`.\n\n**Example — self-hosted Ollama (no key needed):**\n```json\n\"pixa.providers\": {\n  \"ollama\": {\n    \"name\": \"Ollama (local)\",\n    \"baseUrl\": \"http://localhost:11434/v1\",\n    \"requiresApiKey\": false,\n    \"models\": { \"qwen2.5-coder\": { \"name\": \"Qwen2.5 Coder\", \"contextWindow\": 32768 } }\n  }\n}\n```\n\n**Example — NVIDIA NIM:**\n```json\n\"pixa.providers\": {\n  \"nvidia\": {\n    \"name\": \"NVIDIA NIM\",\n    \"baseUrl\": \"https://integrate.api.nvidia.com/v1\",\n    \"models\": { \"z-ai/glm-5.2\": { \"name\": \"GLM 5.2\", \"contextWindow\": 128000 } }\n  }\n}\n```",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "baseUrl",
+              "models"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Display name shown next to this provider's models."
+              },
+              "baseUrl": {
+                "type": "string",
+                "description": "OpenAI-compatible base URL, e.g. http://localhost:11434/v1 (the /chat/completions path is added automatically)."
+              },
+              "requiresApiKey": {
+                "type": "boolean",
+                "default": true,
+                "description": "Set false for local servers that need no credentials (Ollama, LM Studio)."
+              },
+              "models": {
+                "type": "object",
+                "description": "Map of the provider's model name to display metadata.",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Display name. Defaults to the model key."
+                    },
+                    "contextWindow": {
+                      "type": "number",
+                      "default": 128000,
+                      "description": "Token budget."
+                    },
+                    "supportsTools": {
+                      "type": "boolean",
+                      "default": true,
+                      "description": "Set false for chat-only models that cannot call tools."
+                    }
+                  }
+                }
+              }
+            }
+          }
         },
         "pixa.maxTokens": {
           "type": "number",
