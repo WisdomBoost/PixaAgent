@@ -14,6 +14,9 @@ export type AgentEvent =
   | { type: "active-model-changed"; modelId: string }
   | {
       type: "usage";
+      providerId: string;
+      modelId: string;
+      modelLabel: string;
       /** null when the provider didn't report a dollar cost for this request (e.g. some free models). */
       requestCostUsd: number | null;
       /** Running total for the current session, reset on New Session. */

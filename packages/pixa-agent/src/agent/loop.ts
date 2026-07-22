@@ -206,6 +206,9 @@ export class AgentLoop {
           if (requestCostUsd !== null) this.sessionCostUsd += requestCostUsd;
           ctx.emit({
             type: "usage",
+            providerId: entry.provider,
+            modelId: entry.id,
+            modelLabel: entry.label,
             requestCostUsd,
             sessionCostUsd: this.sessionCostUsd,
             promptTokens: result.usage.promptTokens,

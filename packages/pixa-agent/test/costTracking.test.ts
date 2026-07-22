@@ -109,6 +109,41 @@ describe("AgentLoop cost tracking", () => {
     expect(usage.sessionCostUsd).toBe(0);
   });
 
+  it("includes provider and model identity on usage events for dashboard aggregation", async () => {
+    const provider: ModelProvider = {
+      id: "billed",
+      async chat(): Promise<ChatResult> {
+        return {
+          content: "done",
+          toolCalls: [],
+          finishReason: "stop",
+          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15, costUsd: 0.002 },
+        };
+      },
+    };
+    const registry = new ProviderRegistry();
+    registry.register(provider);
+    const events: AgentEvent[] = [];
+    const loop = new AgentLoop({
+      registry,
+      tools: new ToolRegistry(),
+      models: [model],
+      ctx: ctx(events),
+      workspaceInfo: async () => ({ workspaceName: "w", os: "os" }),
+    });
+
+    await loop.run("first", "m", new AbortController().signal);
+
+    const usage = events.find((e) => e.type === "usage") as Extract<AgentEvent, { type: "usage" }> & {
+      providerId: string;
+      modelId: string;
+      modelLabel: string;
+    };
+    expect(usage.providerId).toBe("billed");
+    expect(usage.modelId).toBe("m");
+    expect(usage.modelLabel).toBe("M");
+  });
+
   it("resets the session total on reset()", async () => {
     const provider: ModelProvider = {
       id: "billed",

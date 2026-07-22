@@ -290,6 +290,129 @@ button:hover { background: var(--vscode-button-hoverBackground); }
 .hidden { display: none !important; }
 
 /* ---------- providers panel ---------- */
+#dashboard-panel {
+  position: absolute;
+  inset: 39px 0 0 0;
+  background: var(--vscode-sideBar-background);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+}
+#dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+#dashboard-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 10px;
+}
+.dashboard-empty {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+  font-size: 0.9em;
+}
+.dashboard-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.dashboard-summary-card,
+.dashboard-model-card {
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  padding: 10px;
+}
+.dashboard-summary-label {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.78em;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 4px;
+}
+.dashboard-summary-value {
+  font-size: 1.05em;
+  font-weight: 700;
+}
+.dashboard-model-list {
+  display: grid;
+  gap: 8px;
+}
+.dashboard-model-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dashboard-model-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.dashboard-model-provider {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.78em;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.dashboard-model-name {
+  font-weight: 600;
+}
+.dashboard-model-meta {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+}
+.dashboard-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+.dashboard-metrics-grid div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dashboard-metrics-grid span {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.78em;
+}
+.dashboard-progress-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dashboard-progress-track {
+  width: 100%;
+  height: 8px;
+  background: var(--vscode-input-background);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.dashboard-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--vscode-charts-blue, #4da3ff), var(--vscode-charts-green, #4caf50));
+}
+.dashboard-progress-label {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.78em;
+}
+
+.icon-btn svg {
+  display: block;
+  color: var(--vscode-icon-foreground, currentColor);
+}
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 #providers-panel {
   position: absolute;
   inset: 39px 0 0 0;

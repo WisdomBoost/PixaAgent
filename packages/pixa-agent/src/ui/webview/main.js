@@ -72,6 +72,11 @@
     return "$" + n.toFixed(n < 0.01 ? 6 : 4);
   }
 
+  function formatNumber(n) {
+    if (n === null || n === undefined) return "—";
+    return new Intl.NumberFormat().format(Math.round(n));
+  }
+
   function ensureAssistantEl() {
     if (!currentAssistantEl) {
       currentAssistantEl = addMessage("assistant", "");
@@ -209,6 +214,9 @@
         setRunning(false);
         currentAssistantEl = null;
         break;
+      case "dashboard":
+        renderDashboard(msg.analytics);
+        break;
       case "providers":
         renderProviders(msg.list);
         break;
@@ -296,6 +304,61 @@
     { id: "vllm", label: "vLLM", baseUrl: "http://localhost:8000/v1", requiresApiKey: false },
     { id: "nvidia", label: "NVIDIA NIM", baseUrl: "https://integrate.api.nvidia.com/v1", requiresApiKey: true },
   ];
+
+  function renderDashboard(analytics) {
+    const body = $("dashboard-body");
+    if (!analytics || !analytics.models || analytics.models.length === 0) {
+      body.innerHTML = '<div class="dashboard-empty">No model usage yet. Send a chat message to populate the dashboard.</div>';
+      return;
+    }
+
+    const totals = analytics.totals ?? {};
+    const cards = [
+      { label: "Total Cost", value: formatCost(totals.totalCostUsd ?? 0) },
+      { label: "Total Remaining Budget", value: formatCost(totals.totalRemainingUsd ?? 0) },
+      { label: "Total Requests", value: formatNumber(totals.totalRequests ?? 0) },
+      { label: "Total Tokens", value: formatNumber(totals.totalTokens ?? 0) },
+    ];
+
+    const cardHtml = cards
+      .map((card) => '<div class="dashboard-summary-card"><div class="dashboard-summary-label">' + escapeHtml(card.label) + '</div><div class="dashboard-summary-value">' + escapeHtml(card.value) + '</div></div>')
+      .join("");
+
+    const rows = analytics.models
+      .map((m) => {
+        const budget = m.totalBudgetUsd == null ? null : m.totalBudgetUsd;
+        const spent = m.totalCostUsd ?? 0;
+        const remaining = budget == null ? null : Math.max(budget - spent, 0);
+        const usedPct = budget == null || budget <= 0 ? 0 : Math.min((spent / budget) * 100, 100);
+        const lastUsed = m.lastUsedAt ? timeAgo(m.lastUsedAt) : "never";
+
+        return '<article class="dashboard-model-card">' +
+          '<div class="dashboard-model-head">' +
+          '<div>' +
+          '<div class="dashboard-model-provider">' + escapeHtml(m.providerName || m.providerId) + '</div>' +
+          '<div class="dashboard-model-name">' + escapeHtml(m.modelLabel || m.modelId) + '</div>' +
+          '</div>' +
+          '<div class="dashboard-model-meta">' + escapeHtml(lastUsed) + '</div>' +
+          '</div>' +
+          '<div class="dashboard-metrics-grid">' +
+          '<div><span>Allocated Budget</span><strong>' + (budget == null ? "—" : formatCost(budget)) + '</strong></div>' +
+          '<div><span>Used</span><strong>' + formatCost(spent) + '</strong></div>' +
+          '<div><span>Remaining</span><strong>' + (remaining == null ? "—" : formatCost(remaining)) + '</strong></div>' +
+          '<div><span>Input Tokens</span><strong>' + formatNumber(m.totalInputTokens ?? 0) + '</strong></div>' +
+          '<div><span>Output Tokens</span><strong>' + formatNumber(m.totalOutputTokens ?? 0) + '</strong></div>' +
+          '<div><span>Requests</span><strong>' + formatNumber(m.totalRequests ?? 0) + '</strong></div>' +
+          '<div><span>Cost / Request</span><strong>' + formatCost(m.costPerRequest ?? 0) + '</strong></div>' +
+          '</div>' +
+          '<div class="dashboard-progress-wrap">' +
+          '<div class="dashboard-progress-track"><div class="dashboard-progress-bar" style="width:' + usedPct + '%"></div></div>' +
+          '<div class="dashboard-progress-label">Usage ' + (budget == null ? "not tracked" : usedPct.toFixed(0) + '% of budget') + '</div>' +
+          '</div>' +
+          '</article>';
+      })
+      .join("");
+
+    body.innerHTML = '<div class="dashboard-summary-grid">' + cardHtml + '</div><div class="dashboard-model-list">' + rows + '</div>';
+  }
 
   function renderProviders(list) {
     const el = $("providers-list");
@@ -430,6 +493,11 @@
     vscode.postMessage({ type: "list-sessions" });
   });
   $("close-history").addEventListener("click", () => $("history-panel").classList.add("hidden"));
+  $("show-dashboard").addEventListener("click", () => {
+    $("dashboard-panel").classList.toggle("hidden");
+    vscode.postMessage({ type: "list-analytics" });
+  });
+  $("close-dashboard").addEventListener("click", () => $("dashboard-panel").classList.add("hidden"));
   $("apply-all").addEventListener("click", () =>
     vscode.postMessage({ type: "changeset-action", path: null, action: "apply-all" })
   );

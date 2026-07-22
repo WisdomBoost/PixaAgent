@@ -12,13 +12,22 @@ import { ChangeSet } from "../edits/changeSet";
 import type { RepoIndex } from "../indexer/types";
 import { DiffPreview } from "./diffPreview";
 import { resolveInWorkspace } from "../tools/paths";
-import { parseMentions, formatAttachedFiles, type AttachedFile } from "../agent/mentions";
+import {
+  parseMentions,
+  formatAttachedFiles,
+  type AttachedFile,
+} from "../agent/mentions";
 import type { ChatMessage } from "../providers/types";
 import type { ProvidersConfig } from "../providers/config";
-import { validateProviderForm, parseModelsResponse, modelsEndpointUrl } from "../providers/providerForm";
+import {
+  validateProviderForm,
+  parseModelsResponse,
+  modelsEndpointUrl,
+} from "../providers/providerForm";
 import { providerSecretKey } from "../providers/secretKeys";
 
 const SESSIONS_KEY = "pixa.sessions.v1";
+const USAGE_KEY = "pixa.usage.v1";
 const MAX_SESSIONS = 30;
 
 interface StoredSession {
@@ -35,6 +44,23 @@ interface SessionStore {
   activeId: string | null;
 }
 
+interface UsageModelRecord {
+  providerId: string;
+  providerName: string;
+  modelId: string;
+  modelLabel: string;
+  totalBudgetUsd: number | null;
+  totalCostUsd: number;
+  totalRequests: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  lastUsedAt: number | null;
+}
+
+interface UsageAnalyticsStore {
+  byModel: Record<string, UsageModelRecord>;
+}
+
 /** Messages the webview sends to the extension host. */
 type WebviewMessage =
   | { type: "ready" }
@@ -42,7 +68,11 @@ type WebviewMessage =
   | { type: "stop" }
   | { type: "selectModel"; modelId: string }
   | { type: "approval-response"; requestId: string; approved: boolean }
-  | { type: "changeset-action"; path: string | null; action: "apply" | "reject" | "apply-all" | "open-diff" | "revert" }
+  | {
+      type: "changeset-action";
+      path: string | null;
+      action: "apply" | "reject" | "apply-all" | "open-diff" | "revert";
+    }
   | { type: "new-session" }
   | { type: "list-sessions" }
   | { type: "load-session"; id: string }
@@ -60,15 +90,19 @@ type WebviewMessage =
       models: { id: string; name?: string }[];
     }
   | { type: "delete-provider"; id: string }
+  | { type: "list-analytics" }
   | { type: "reload-window" };
 
-export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalService {
+export class ChatViewProvider
+  implements vscode.WebviewViewProvider, ApprovalService
+{
   private view: vscode.WebviewView | undefined;
   private loop: AgentLoop;
   private abort: AbortController | undefined;
   private pendingApprovals = new Map<string, (approved: boolean) => void>();
   private currentModelId: string;
   private running = false;
+  private usageAnalytics = new Map<string, UsageModelRecord>();
 
   constructor(
     private context: vscode.ExtensionContext,
@@ -78,7 +112,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     private changeSet: ChangeSet,
     private index: RepoIndex,
     private diffPreview: DiffPreview,
-    private workspaceRoot: string
+    private workspaceRoot: string,
   ) {
     this.currentModelId = this.resolveDefaultModelId();
     const ctx: ToolContext = {
@@ -88,7 +122,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
       approvals: this,
       readWorkspaceFile: async (absPath: string) => {
         try {
-          const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(absPath));
+          const bytes = await vscode.workspace.fs.readFile(
+            vscode.Uri.file(absPath),
+          );
           return Buffer.from(bytes).toString("utf8");
         } catch {
           return null;
@@ -100,7 +136,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         if (event.type === "active-model-changed") {
           this.currentModelId = event.modelId;
         }
+        if (event.type === "usage") {
+          this.trackUsage(event);
+        }
         this.post(event);
+        if (event.type === "usage") this.postDashboard();
       },
     };
     this.loop = new AgentLoop({
@@ -113,7 +153,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         let activeFile: string | undefined;
         let selection: string | undefined;
         if (editor && editor.document.uri.scheme === "file") {
-          const rel = path.relative(this.workspaceRoot, editor.document.uri.fsPath);
+          const rel = path.relative(
+            this.workspaceRoot,
+            editor.document.uri.fsPath,
+          );
           if (rel && !rel.startsWith("..")) {
             activeFile = rel.split(path.sep).join("/");
             const selected = editor.document.getText(editor.selection);
@@ -127,7 +170,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
           selection,
         };
       },
-      maxTokens: () => vscode.workspace.getConfiguration("pixa").get<number>("maxTokens") ?? 8192,
+      maxTokens: () =>
+        vscode.workspace.getConfiguration("pixa").get<number>("maxTokens") ??
+        8192,
       // Persist mid-task so a reload/crash during a long run doesn't discard
       // the work already done.
       onCheckpoint: () => this.saveSession(),
@@ -135,14 +180,23 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
   }
 
   private resolveDefaultModelId(): string {
-    const configured = vscode.workspace.getConfiguration("pixa").get<string>("defaultModel") ?? "nemotron-free";
-    const chatModels = this.models.filter((m) => m.provider !== "local-embeddings");
-    return chatModels.some((m) => m.id === configured) ? configured : chatModels[0]?.id ?? "nemotron-free";
+    const configured =
+      vscode.workspace.getConfiguration("pixa").get<string>("defaultModel") ??
+      "nemotron-free";
+    const chatModels = this.models.filter(
+      (m) => m.provider !== "local-embeddings",
+    );
+    return chatModels.some((m) => m.id === configured)
+      ? configured
+      : (chatModels[0]?.id ?? "nemotron-free");
   }
 
   /* ---------- ApprovalService ---------- */
 
-  requestApproval(kind: "command" | "commit", detail: string): Promise<boolean> {
+  requestApproval(
+    kind: "command" | "commit",
+    detail: string,
+  ): Promise<boolean> {
     const requestId = crypto.randomUUID();
     return new Promise<boolean>((resolve) => {
       this.pendingApprovals.set(requestId, resolve);
@@ -156,10 +210,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     this.view = view;
     view.webview.options = {
       enableScripts: true,
-      localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, "dist", "webview")],
+      localResourceRoots: [
+        vscode.Uri.joinPath(this.context.extensionUri, "dist", "webview"),
+      ],
     };
     view.webview.html = this.html(view.webview);
-    view.webview.onDidReceiveMessage((msg: WebviewMessage) => void this.onMessage(msg));
+    view.webview.onDidReceiveMessage(
+      (msg: WebviewMessage) => void this.onMessage(msg),
+    );
   }
 
   newSession(): void {
@@ -181,11 +239,98 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
 
   private loadStore(): SessionStore {
     const raw = this.context.workspaceState.get<SessionStore>(SESSIONS_KEY);
-    return raw && Array.isArray(raw.sessions) ? raw : { sessions: [], activeId: null };
+    return raw && Array.isArray(raw.sessions)
+      ? raw
+      : { sessions: [], activeId: null };
   }
 
   private saveStore(store: SessionStore): void {
     void this.context.workspaceState.update(SESSIONS_KEY, store);
+  }
+
+  private loadAnalytics(): UsageAnalyticsStore {
+    const raw = this.context.workspaceState.get<UsageAnalyticsStore>(USAGE_KEY);
+    return raw && raw.byModel ? raw : { byModel: {} };
+  }
+
+  private saveAnalytics(store: UsageAnalyticsStore): void {
+    void this.context.workspaceState.update(USAGE_KEY, store);
+  }
+
+  private trackUsage(event: Extract<AgentEvent, { type: "usage" }>): void {
+    console.log(event);
+    const key = `${event.providerId}:${event.modelId}`;
+    const store = this.loadAnalytics();
+    const current = store.byModel[key] ?? {
+      providerId: event.providerId,
+      providerName: this.providerDisplayName(event.providerId),
+      modelId: event.modelId,
+      modelLabel: event.modelLabel,
+      totalBudgetUsd: null,
+      totalCostUsd: 0,
+      totalRequests: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      lastUsedAt: null,
+    };
+    current.totalCostUsd += event.requestCostUsd ?? 0;
+    current.totalRequests += 1;
+    current.totalInputTokens += event.promptTokens;
+    current.totalOutputTokens += event.completionTokens;
+    current.lastUsedAt = Date.now();
+    store.byModel[key] = current;
+    this.saveAnalytics(store);
+    this.usageAnalytics = new Map(Object.entries(store.byModel));
+  }
+
+  private providerDisplayName(providerId: string): string {
+    const configured =
+      vscode.workspace
+        .getConfiguration("pixa")
+        .get<ProvidersConfig>("providers") ?? {};
+    return configured[providerId]?.name?.trim() || providerId;
+  }
+
+  private dashboardPayload(): Record<string, unknown> {
+    const store = this.loadAnalytics();
+    const byModel = Object.values(store.byModel).sort(
+      (a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0),
+    );
+    console.log("bymodel", byModel);
+    const totalCostUsd = byModel.reduce((sum, r) => sum + r.totalCostUsd, 0);
+    const totalRequests = byModel.reduce((sum, r) => sum + r.totalRequests, 0);
+    const totalTokens = byModel.reduce(
+      (sum, r) => sum + r.totalInputTokens + r.totalOutputTokens,
+      0,
+    );
+    const totalRemainingUsd = byModel.reduce(
+      (sum, r) =>
+        sum +
+        (r.totalBudgetUsd === null
+          ? 0
+          : Math.max(r.totalBudgetUsd - r.totalCostUsd, 0)),
+      0,
+    );
+    return {
+      totals: {
+        totalCostUsd,
+        totalRemainingUsd,
+        totalRequests,
+        totalTokens,
+      },
+      models: byModel.map((r) => ({
+        ...r,
+        costPerRequest: r.totalRequests ? r.totalCostUsd / r.totalRequests : 0,
+        remainingBudgetUsd:
+          r.totalBudgetUsd === null
+            ? null
+            : Math.max(r.totalBudgetUsd - r.totalCostUsd, 0),
+      })),
+    };
+  }
+
+  private postDashboard(): void {
+    this.post({ type: "dashboard", analytics: this.dashboardPayload() } as any);
   }
 
   /** Upsert the active session from the loop's current state. */
@@ -204,7 +349,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
       costUsd: this.loop.sessionCost,
       history: this.loop.history.slice(-200), // bound growth; context manager prunes anyway
     };
-    store.sessions = [session, ...store.sessions.filter((s) => s.id !== session.id)].slice(0, MAX_SESSIONS);
+    store.sessions = [
+      session,
+      ...store.sessions.filter((s) => s.id !== session.id),
+    ].slice(0, MAX_SESSIONS);
     store.activeId = session.id;
     this.saveStore(store);
     this.postSessions();
@@ -212,7 +360,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
 
   private deriveTitle(): string {
     const firstUser = this.loop.history.find((m) => m.role === "user");
-    const text = (firstUser?.content ?? "New chat").replace(/\n*<attached-files>[\s\S]*<\/attached-files>/, "").trim();
+    const text = (firstUser?.content ?? "New chat")
+      .replace(/\n*<attached-files>[\s\S]*<\/attached-files>/, "")
+      .trim();
     return text.slice(0, 48) + (text.length > 48 ? "…" : "") || "New chat";
   }
 
@@ -220,7 +370,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
   private restoreSession(): void {
     if (this.loop.history.length > 0) {
       // Live in-memory session — the panel was hidden, not the window reloaded.
-      this.post({ type: "transcript", entries: this.transcript(), sessionCostUsd: this.loop.sessionCost } as any);
+      this.post({
+        type: "transcript",
+        entries: this.transcript(),
+        sessionCostUsd: this.loop.sessionCost,
+      } as any);
       this.postSessions();
       return;
     }
@@ -229,7 +383,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     if (active) {
       this.activeSessionId = active.id;
       this.loop.restore(active.history, active.costUsd ?? 0);
-      this.post({ type: "transcript", entries: this.transcript(), sessionCostUsd: this.loop.sessionCost } as any);
+      this.post({
+        type: "transcript",
+        entries: this.transcript(),
+        sessionCostUsd: this.loop.sessionCost,
+      } as any);
     }
     this.postSessions();
   }
@@ -245,7 +403,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     this.saveStore(store);
     this.loop.restore(target.history, target.costUsd ?? 0);
     this.changeSet.clearResolved();
-    this.post({ type: "transcript", entries: this.transcript(), sessionCostUsd: this.loop.sessionCost } as any);
+    this.post({
+      type: "transcript",
+      entries: this.transcript(),
+      sessionCostUsd: this.loop.sessionCost,
+    } as any);
     this.postSessions();
   }
 
@@ -257,7 +419,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
       if (this.activeSessionId === id) {
         this.activeSessionId = null;
         this.loop.reset();
-        this.post({ type: "transcript", entries: [], sessionCostUsd: 0 } as any);
+        this.post({
+          type: "transcript",
+          entries: [],
+          sessionCostUsd: 0,
+        } as any);
       }
     }
     this.saveStore(store);
@@ -272,24 +438,37 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
       sessions: store.sessions
         .slice()
         .sort((a, b) => b.updatedAt - a.updatedAt)
-        .map((s) => ({ id: s.id, title: s.title, updatedAt: s.updatedAt, costUsd: s.costUsd })),
+        .map((s) => ({
+          id: s.id,
+          title: s.title,
+          updatedAt: s.updatedAt,
+          costUsd: s.costUsd,
+        })),
     } as any);
   }
 
   private transcript(): { role: string; text: string }[] {
     return this.loop.history
-      .filter((m) => (m.role === "user" || m.role === "assistant") && m.content.trim())
+      .filter(
+        (m) =>
+          (m.role === "user" || m.role === "assistant") && m.content.trim(),
+      )
       .map((m) => ({
         role: m.role,
         // Hide bulky attached-file blocks from the replayed view.
-        text: m.content.replace(/\n*<attached-files>[\s\S]*<\/attached-files>/, " [attached files]"),
+        text: m.content.replace(
+          /\n*<attached-files>[\s\S]*<\/attached-files>/,
+          " [attached files]",
+        ),
       }));
   }
 
   private async onMessage(msg: WebviewMessage): Promise<void> {
     switch (msg.type) {
       case "ready": {
-        const hasApiKey = !!(await this.context.secrets.get("pixa.openrouter.apiKey"));
+        const hasApiKey = !!(await this.context.secrets.get(
+          "pixa.openrouter.apiKey",
+        ));
         this.post({
           type: "init",
           models: this.models
@@ -299,6 +478,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
           hasApiKey,
         } as any);
         this.restoreSession();
+        this.postDashboard();
         this.postChangeSet();
         break;
       }
@@ -325,7 +505,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         }
         break;
       case "selectModel":
-        if (this.models.some((m) => m.id === msg.modelId && m.provider !== "local-embeddings")) {
+        if (
+          this.models.some(
+            (m) => m.id === msg.modelId && m.provider !== "local-embeddings",
+          )
+        ) {
           this.currentModelId = msg.modelId;
         }
         break;
@@ -354,13 +538,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         break;
       case "set-api-key": {
         await vscode.commands.executeCommand("pixa.setApiKey");
-        const hasApiKey = !!(await this.context.secrets.get("pixa.openrouter.apiKey"));
+        const hasApiKey = !!(await this.context.secrets.get(
+          "pixa.openrouter.apiKey",
+        ));
         this.post({ type: "api-key-status", hasApiKey } as any);
         if (hasApiKey) this.post({ type: "status", text: "API key updated." });
         break;
       }
       case "list-providers":
         this.postProviders();
+        break;
+      case "list-analytics":
+        this.postDashboard();
         break;
       case "fetch-models": {
         const result = await this.fetchModels(msg.baseUrl, msg.apiKey);
@@ -386,7 +575,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
   /* ---------- provider management ---------- */
 
   private postProviders(): void {
-    const cfg = vscode.workspace.getConfiguration("pixa").get<ProvidersConfig>("providers") ?? {};
+    const cfg =
+      vscode.workspace
+        .getConfiguration("pixa")
+        .get<ProvidersConfig>("providers") ?? {};
     this.post({
       type: "providers",
       list: Object.entries(cfg).map(([id, p]) => ({
@@ -400,7 +592,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
 
   private async fetchModels(
     baseUrl: string,
-    apiKey?: string
+    apiKey?: string,
   ): Promise<{ ok: true; models: string[] } | { ok: false; reason: string }> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
@@ -409,9 +601,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         signal: controller.signal,
         headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
       });
-      if (!res.ok) return { ok: false, reason: `Server responded with ${res.status}.` };
+      if (!res.ok)
+        return { ok: false, reason: `Server responded with ${res.status}.` };
       const models = parseModelsResponse(await res.json());
-      if (models.length === 0) return { ok: false, reason: "No models found in the server's response." };
+      if (models.length === 0)
+        return {
+          ok: false,
+          reason: "No models found in the server's response.",
+        };
       return { ok: true, models };
     } catch (e: any) {
       return { ok: false, reason: e?.message ?? "Request failed." };
@@ -432,8 +629,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     const cfg = config.get<ProvidersConfig>("providers") ?? {};
 
     const result = validateProviderForm(
-      { id: msg.id, name: msg.name, baseUrl: msg.baseUrl, requiresApiKey: msg.requiresApiKey, models: msg.models },
-      Object.keys(cfg)
+      {
+        id: msg.id,
+        name: msg.name,
+        baseUrl: msg.baseUrl,
+        requiresApiKey: msg.requiresApiKey,
+        models: msg.models,
+      },
+      Object.keys(cfg),
     );
     if (!result.ok) {
       const message = Object.values(result.errors).filter(Boolean).join(" ");
@@ -443,14 +646,24 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
 
     const id = msg.id.trim();
     try {
-      await config.update("providers", { ...cfg, [id]: result.config }, vscode.ConfigurationTarget.Global);
+      await config.update(
+        "providers",
+        { ...cfg, [id]: result.config },
+        vscode.ConfigurationTarget.Global,
+      );
     } catch (e: any) {
-      this.post({ type: "provider-error", message: `Failed to save: ${e?.message ?? e}` });
+      this.post({
+        type: "provider-error",
+        message: `Failed to save: ${e?.message ?? e}`,
+      });
       return;
     }
 
     if (msg.requiresApiKey && msg.apiKey?.trim()) {
-      await this.context.secrets.store(providerSecretKey(id), msg.apiKey.trim());
+      await this.context.secrets.store(
+        providerSecretKey(id),
+        msg.apiKey.trim(),
+      );
     }
 
     this.post({ type: "provider-saved", id });
@@ -471,7 +684,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
 
   private async onChangeSetAction(
     relPath: string | null,
-    action: "apply" | "reject" | "apply-all" | "open-diff" | "revert"
+    action: "apply" | "reject" | "apply-all" | "open-diff" | "revert",
   ): Promise<void> {
     try {
       if (action === "open-diff" && relPath) {
@@ -502,7 +715,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     if (change.originalContent === null) {
       await vscode.workspace.fs.delete(uri, { useTrash: true });
     } else {
-      await vscode.workspace.fs.writeFile(uri, Buffer.from(change.originalContent, "utf8"));
+      await vscode.workspace.fs.writeFile(
+        uri,
+        Buffer.from(change.originalContent, "utf8"),
+      );
     }
     this.changeSet.markReverted(relPath);
     this.diffPreview.invalidate(relPath);
@@ -512,7 +728,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     const change = this.changeSet.get(relPath);
     if (!change || change.status !== "pending") return;
     const abs = resolveInWorkspace(this.workspaceRoot, relPath);
-    await vscode.workspace.fs.writeFile(vscode.Uri.file(abs), Buffer.from(change.newContent, "utf8"));
+    await vscode.workspace.fs.writeFile(
+      vscode.Uri.file(abs),
+      Buffer.from(change.newContent, "utf8"),
+    );
     this.changeSet.markApplied(relPath);
     this.diffPreview.invalidate(relPath);
   }
@@ -533,7 +752,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
           await vscode.workspace.fs.stat(exact);
           uri = exact;
         } catch {
-          const found = await vscode.workspace.findFiles(`**/${norm}`, "**/node_modules/**", 1);
+          const found = await vscode.workspace.findFiles(
+            `**/${norm}`,
+            "**/node_modules/**",
+            1,
+          );
           uri = found[0];
         }
         if (!uri) {
@@ -541,8 +764,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
           continue;
         }
         const bytes = await vscode.workspace.fs.readFile(uri);
-        const rel = path.relative(this.workspaceRoot, uri.fsPath).split(path.sep).join("/");
-        attached.push({ path: rel, content: Buffer.from(bytes).toString("utf8") });
+        const rel = path
+          .relative(this.workspaceRoot, uri.fsPath)
+          .split(path.sep)
+          .join("/");
+        attached.push({
+          path: rel,
+          content: Buffer.from(bytes).toString("utf8"),
+        });
       } catch {
         unresolved.push(mention);
       }
@@ -553,7 +782,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
   private postChangeSet(): void {
     this.post({
       type: "changeset-updated",
-      files: this.changeSet.list().map((f) => ({ path: f.path, status: f.status })),
+      files: this.changeSet
+        .list()
+        .map((f) => ({ path: f.path, status: f.status })),
     });
   }
 
@@ -564,10 +795,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
   private html(webview: vscode.Webview): string {
     const nonce = crypto.randomBytes(16).toString("hex");
     const scriptUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, "dist", "webview", "main.js")
+      vscode.Uri.joinPath(
+        this.context.extensionUri,
+        "dist",
+        "webview",
+        "main.js",
+      ),
     );
     const styleUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, "dist", "webview", "style.css")
+      vscode.Uri.joinPath(
+        this.context.extensionUri,
+        "dist",
+        "webview",
+        "style.css",
+      ),
     );
     return `<!DOCTYPE html>
 <html lang="en">
@@ -583,9 +824,28 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     <div id="header">
       <select id="model-select" title="Model"></select>
       <span id="session-cost" title="Total spend this session (from OpenRouter usage accounting)">$0.00</span>
-      <button id="show-history" class="icon-btn" title="Chat history">🕘</button>
-      <button id="new-session" class="icon-btn" title="New chat">＋</button>
-      <button id="show-providers" class="icon-btn" title="Providers">⚙</button>
+      <button id="show-history" class="icon-btn" title="Chat history"> <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8 3v5l3 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M13.5 8A5.5 5.5 0 1 1 11 3.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      <path d="M13.5 3.5v3h-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    </button>
+      <button id="new-session" class="icon-btn" title="New chat"> <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8 2.5v11M2.5 8h11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+    </svg>
+    </button>
+      <button id="show-dashboard" class="icon-btn" title="Dashboard"> <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="5" height="5" rx="0.8" stroke="currentColor" stroke-width="1.2"/>
+      <rect x="9" y="2" width="5" height="5" rx="0.8" stroke="currentColor" stroke-width="1.2"/>
+      <rect x="2" y="9" width="5" height="5" rx="0.8" stroke="currentColor" stroke-width="1.2"/>
+      <rect x="9" y="9" width="5" height="5" rx="0.8" stroke="currentColor" stroke-width="1.2"/>
+    </svg>
+    </button>
+      <button id="show-providers" class="icon-btn" title="Providers"> <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M6 2v3M10 2v3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+    <path d="M4.5 5h7v3a3.5 3.5 0 0 1-3.5 3.5A3.5 3.5 0 0 1 4.5 8V5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+    <path d="M8 11.5V14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+  </svg></button>
     </div>
     <div id="history-panel" class="hidden">
       <div id="history-header">
@@ -593,6 +853,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         <button id="close-history" class="icon-btn" title="Back to chat">✕</button>
       </div>
       <div id="history-list"></div>
+    </div>
+    <div id="dashboard-panel" class="hidden">
+      <div id="dashboard-header">
+        <span>Dashboard</span>
+        <button id="close-dashboard" class="icon-btn" title="Back to chat">✕</button>
+      </div>
+      <div id="dashboard-body"></div>
     </div>
     <div id="providers-panel" class="hidden">
       <div id="providers-header">

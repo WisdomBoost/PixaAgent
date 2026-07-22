@@ -8,3 +8,4 @@ ide/vscode/
 
 # Local progress tracker — not for git
 PROGRESS.md
+.pixa/
