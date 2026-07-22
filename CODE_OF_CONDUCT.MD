@@ -62,7 +62,7 @@ an appointed representative at an online or offline event.
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the project maintainers responsible for enforcement at:
 
-**[INSERT CONTACT EMAIL HERE]**
+**staff.pixaflipai@gmail.com**
 
 All complaints will be reviewed and investigated promptly and fairly.
 
