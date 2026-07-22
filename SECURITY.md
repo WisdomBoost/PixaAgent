@@ -4,14 +4,13 @@
 
 **Please do not open a public GitHub issue for security vulnerabilities.**
 
-Report privately using **[GitHub Security Advisories](https://github.com/WisdomBoost/PixaAgent/security/advisories/new)**
+Report privately using **[GitHub Security Advisories](https://github.com/WisdomBoost-LLC/PixaAgent/security/advisories/new)**
 for this repository. This opens a private discussion visible only to
 maintainers until a fix is ready, and lets us credit you properly once it's
 disclosed.
 
-If that link doesn't work for you, open a regular issue titled only
-"Security issue — see email" with no details, and a maintainer will follow up
-to get you a private channel.
+If that link doesn't work for you, email **staff.pixaflipai@gmail.com** with
+the details instead. Please don't post vulnerability details in a public issue.
 
 ### What to include
 

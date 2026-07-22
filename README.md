@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/WisdomBoost/PixaAgent/main/docs/banner.png" alt="Pixa Agent" width="100%">
+<img src="https://raw.githubusercontent.com/WisdomBoost-LLC/PixaAgent/main/docs/banner.png" alt="Pixa Agent" width="100%">
 
 # Pixa Agent
 
@@ -11,7 +11,7 @@ edits multiple files — with every change staged as a diff you approve.
 Point it at OpenRouter, your company gateway, or a model running on your own
 laptop. No vendor lock-in. No telemetry. No required server.
 
-[![CI](https://github.com/WisdomBoost/PixaAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/WisdomBoost/PixaAgent/actions/workflows/ci.yml)
+[![CI](https://github.com/WisdomBoost-LLC/PixaAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/WisdomBoost-LLC/PixaAgent/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.90+-blue.svg)](https://code.visualstudio.com/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
@@ -69,7 +69,7 @@ code --install-extension pixa-agent-<version>.vsix
 **From source:**
 
 ```bash
-git clone https://github.com/WisdomBoost/PixaAgent.git
+git clone https://github.com/WisdomBoost-LLC/PixaAgent.git
 cd PixaAgent
 npm install
 npm run compile -w pixa-agent
@@ -202,7 +202,7 @@ and we'd rather you know exactly where the edges are.
 - Command sandboxing — **see Security below**
 
 We'd rather ship an honest README than a flattering one. If something here is
-wrong or out of date, that's a bug — please [open an issue](https://github.com/WisdomBoost/PixaAgent/issues).
+wrong or out of date, that's a bug — please [open an issue](https://github.com/WisdomBoost-LLC/PixaAgent/issues).
 
 ---
 
@@ -257,5 +257,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 [MIT](LICENSE) — use it, fork it, ship it.
 
 <div align="center">
-<sub>Built by <a href="https://github.com/WisdomBoost">WisdomBoost</a></sub>
+<sub>Built by <a href="https://github.com/WisdomBoost-LLC">Pixaflip Technologies</a></sub>
 </div>

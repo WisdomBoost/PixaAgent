@@ -4,10 +4,11 @@
   "description": "AI coding agent for Pixa IDE — plans, edits, and runs tasks in your workspace with your approval.",
   "version": "0.6.0",
   "publisher": "pixa",
+  "author": "Pixaflip Technologies",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/WisdomBoost/PixaAgent.git"
+    "url": "https://github.com/WisdomBoost-LLC/PixaAgent.git"
   },
   "engines": {
     "vscode": "^1.90.0"

@@ -34,7 +34,7 @@ packages/
 ## Setup
 
 ```bash
-git clone https://github.com/WisdomBoost/PixaAgent.git
+git clone https://github.com/WisdomBoost-LLC/PixaAgent.git
 cd PixaAgent
 npm install
 npm run compile -w pixa-agent
