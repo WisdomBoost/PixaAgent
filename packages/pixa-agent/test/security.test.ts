@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { redactSecrets } from "../src/security/redact";
 import { evaluateCommand } from "../src/security/sandbox";
 import { SecurityLogger } from "../src/security/audit";

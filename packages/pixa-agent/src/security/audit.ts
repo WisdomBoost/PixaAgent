@@ -9,7 +9,6 @@ export interface AuditLogEntry {
 
 export class SecurityLogger {
     private channel: vscode.OutputChannel | null = null;
-    private logFileUri: vscode.Uri | null = null;
 
     constructor(channelName = "Pixa Security Audit") {
         try {
