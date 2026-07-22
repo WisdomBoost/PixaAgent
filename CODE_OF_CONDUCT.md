@@ -1,64 +1,136 @@
-# Code of Conduct
+# Contributor Covenant Code of Conduct
 
-## Our commitment
+## Our Pledge
 
-Pixa Agent is an open project, and we want it to be a place where anyone can
-contribute and learn — regardless of experience, background, or identity. We're
-committed to making participation a harassment-free experience for everyone.
+We as members, contributors, and leaders pledge to make participation in our
+community a harassment-free experience for everyone, regardless of age, body
+size, visible or invisible disability, ethnicity, sex characteristics, gender
+identity and expression, level of experience, education, socio-economic
+status, nationality, personal appearance, race, religion, or sexual identity
+and orientation.
 
-## What we expect
+We pledge to act and interact in ways that contribute to an open, welcoming,
+diverse, inclusive, and healthy community.
 
-Things that make this a good community:
+## Our Standards
 
-- **Be respectful.** Disagree with ideas, not people. Critique code, not the
-  person who wrote it.
-- **Be patient with newcomers.** Everyone was new once. A first-time
-  contributor asking a "basic" question is exactly who we're building for.
-- **Assume good faith.** Most misunderstandings are just that — assume the
-  other person means well until there's clear reason not to.
-- **Be clear and constructive.** In reviews and issues, explain the *why*, and
-  suggest a path forward rather than only pointing at what's wrong.
-- **Give credit.** Acknowledge others' work and ideas.
+Examples of behavior that contributes to a positive environment for our
+community include:
 
-## What's not acceptable
+* Demonstrating empathy and kindness toward other people
+* Being respectful of differing opinions, viewpoints, and experiences
+* Giving and gracefully accepting constructive feedback
+* Accepting responsibility and apologizing to those affected by our mistakes,
+  and learning from the experience
+* Focusing on what is best not just for us as individuals, but for the
+  overall community
 
-- Harassment, insults, or derogatory comments — public or private.
-- Discrimination or demeaning language based on age, disability, ethnicity,
-  gender identity or expression, nationality, personal appearance, race,
-  religion, or sexual identity and orientation.
-- Personal or political attacks.
-- Publishing others' private information without explicit permission.
-- Sustained disruption of discussions, or deliberately derailing conversations.
-- Unwelcome sexual attention or advances.
+Examples of unacceptable behavior include:
+
+* The use of sexualized language or imagery, and sexual attention or
+  advances of any kind
+* Trolling, insulting or derogatory comments, and personal or political
+  attacks
+* Public or private harassment
+* Publishing others' private information, such as a physical or email
+  address, without their explicit permission
+* Other conduct which could reasonably be considered inappropriate in a
+  professional setting
+
+## Enforcement Responsibilities
+
+Project maintainers are responsible for clarifying and enforcing our
+standards of acceptable behavior and will take appropriate and fair
+corrective action in response to any behavior that they deem inappropriate,
+threatening, offensive, or harmful.
+
+Project maintainers have the right and responsibility to remove, edit, or
+reject comments, commits, code, wiki edits, issues, and other contributions
+that are not aligned to this Code of Conduct, and will communicate reasons
+for moderation decisions when appropriate.
 
 ## Scope
 
-This applies everywhere the project lives — issues, pull requests, discussions,
-commit messages, and any other project space — as well as when someone is
-representing the project in public.
-
-## Reporting
-
-If you experience or witness behavior that breaks this code, please report it
-privately to the maintainers at **staff.pixaflipai@gmail.com**.
-
-All reports will be reviewed and investigated promptly and fairly. We will
-respect the privacy and safety of whoever reports an issue. You will not be
-penalized for reporting in good faith, even if the investigation finds no
-violation.
+This Code of Conduct applies within all community spaces, and also applies
+when an individual is officially representing the community in public
+spaces. Examples of representing our community include using an official
+e-mail address, posting via an official social media account, or acting as
+an appointed representative at an online or offline event.
 
 ## Enforcement
 
-Maintainers are responsible for clarifying and enforcing this code, and may
-take any action they judge appropriate — from a private warning, to editing or
-removing contributions, to a temporary or permanent ban from the project — in
-response to behavior they deem inappropriate, threatening, or harmful.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be
+reported to the project maintainers responsible for enforcement at:
 
-We'll always aim to be proportionate and to explain our reasoning, but the
-safety and health of the community comes first.
+**staff.pixaflipai@gmail.com**
+
+All complaints will be reviewed and investigated promptly and fairly.
+
+All project maintainers are obligated to respect the privacy and security of
+the reporter of any incident.
+
+## Enforcement Guidelines
+
+Project maintainers will follow these Community Impact Guidelines in
+determining the consequences for any action they deem in violation of this
+Code of Conduct:
+
+### 1. Correction
+
+**Community Impact**: Use of inappropriate language or other behavior deemed
+unprofessional or unwelcome in the community.
+
+**Consequence**: A private, written warning from project maintainers,
+providing clarity around the nature of the violation and an explanation of
+why the behavior was inappropriate. A public apology may be requested.
+
+### 2. Warning
+
+**Community Impact**: A violation through a single incident or series of
+actions.
+
+**Consequence**: A warning with consequences for continued behavior. No
+interaction with the people involved, including unsolicited interaction with
+those enforcing the Code of Conduct, for a specified period of time. This
+includes avoiding interactions in community spaces as well as external
+channels like social media. Violating these terms may lead to a temporary or
+permanent ban.
+
+### 3. Temporary Ban
+
+**Community Impact**: A serious violation of community standards, including
+sustained inappropriate behavior.
+
+**Consequence**: A temporary ban from any sort of interaction or public
+communication with the community for a specified period of time. No public
+or private interaction with the people involved, including unsolicited
+interaction with those enforcing the Code of Conduct, is allowed during this
+period. Violating these terms may lead to a permanent ban.
+
+### 4. Permanent Ban
+
+**Community Impact**: Demonstrating a pattern of violation of community
+standards, including sustained inappropriate behavior, harassment of an
+individual, or aggression toward or disparagement of classes of individuals.
+
+**Consequence**: A permanent ban from any sort of public interaction within
+the community.
 
 ## Attribution
 
-This Code of Conduct is adapted from the spirit of the
-[Contributor Covenant](https://www.contributor-covenant.org), version 2.1,
-rewritten in our own words to keep it readable.
+This Code of Conduct is adapted from the [Contributor Covenant][homepage],
+version 2.1, available at
+[https://www.contributor-covenant.org/version/2/1/code_of_conduct.html][v2.1].
+
+Community Impact Guidelines were inspired by
+[Mozilla's code of conduct enforcement ladder][Mozilla CoC].
+
+For answers to common questions about this code of conduct, see the FAQ at
+[https://www.contributor-covenant.org/faq][FAQ]. Translations are available
+at [https://www.contributor-covenant.org/translations][translations].
+
+[homepage]: https://www.contributor-covenant.org
+[v2.1]: https://www.contributor-covenant.org/version/2/1/code_of_conduct.html
+[Mozilla CoC]: https://github.com/mozilla/diversity
+[FAQ]: https://www.contributor-covenant.org/faq
+[translations]: https://www.contributor-covenant.org/translations
