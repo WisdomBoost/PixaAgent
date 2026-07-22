@@ -112,5 +112,5 @@ internals.
 
 ## Code of conduct
 
-Be respectful, be patient with newcomers, assume good faith. Report anything
-that falls short by opening an issue or contacting a maintainer directly.
+Participation in this project is governed by our
+[Code of Conduct](CODE_OF_CONDUCT.md). Please read it.
