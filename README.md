@@ -20,6 +20,21 @@ laptop. No vendor lock-in. No telemetry. No required server.
 
 ---
 
+## See it in action
+
+<div align="center">
+
+<video src="https://raw.githubusercontent.com/WisdomBoost-LLC/PixaAgent/main/docs/demo.mp4" controls width="100%">
+  Your browser doesn't support inline video —
+  <a href="https://raw.githubusercontent.com/WisdomBoost-LLC/PixaAgent/main/docs/demo.mp4">download the demo</a> instead.
+</video>
+
+<sub>Install → connect a model, cloud or local → describe a task → review the diff → approve.</sub>
+
+</div>
+
+---
+
 ## Why Pixa?
 
 Most AI coding assistants decide which model you use and where your code goes.
