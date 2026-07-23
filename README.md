@@ -22,16 +22,9 @@ laptop. No vendor lock-in. No telemetry. No required server.
 
 ## See it in action
 
-<div align="center">
-
-<video src="https://raw.githubusercontent.com/WisdomBoost-LLC/PixaAgent/main/docs/demo.mp4" controls width="100%">
-  Your browser doesn't support inline video —
-  <a href="https://raw.githubusercontent.com/WisdomBoost-LLC/PixaAgent/main/docs/demo.mp4">download the demo</a> instead.
-</video>
+https://github.com/user-attachments/assets/33ce7f38-5ffe-463e-aa8a-7bb7286dd979
 
 <sub>Install → connect a model, cloud or local → describe a task → review the diff → approve.</sub>
-
-</div>
 
 ---
 
