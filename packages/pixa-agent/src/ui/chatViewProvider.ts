@@ -70,6 +70,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
   private pendingApprovals = new Map<string, (approved: boolean) => void>();
   private currentModelId: string;
   private running = false;
+  private isGatewayReady = false;
+  private gatewayErrorMsg: string | null = null;
 
   constructor(
     private context: vscode.ExtensionContext,
@@ -161,6 +163,30 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     };
     view.webview.html = this.html(view.webview);
     view.webview.onDidReceiveMessage((msg: WebviewMessage) => void this.onMessage(msg));
+  }
+
+  setGatewayReady(ready: boolean): void {
+    this.isGatewayReady = ready;
+    this.gatewayErrorMsg = null;
+    this.postGatewayStatus();
+    if (ready) {
+      this.post({ type: "status", text: "Local gateway is connected and ready." });
+    }
+  }
+
+  setGatewayError(errorMsg: string): void {
+    this.isGatewayReady = false;
+    this.gatewayErrorMsg = errorMsg;
+    this.postGatewayStatus();
+    this.post({ type: "error", message: errorMsg });
+  }
+
+  postGatewayStatus(): void {
+    this.post({
+      type: "gateway-status",
+      ready: this.isGatewayReady,
+      error: this.gatewayErrorMsg || undefined,
+    });
   }
 
   newSession(): void {
@@ -301,10 +327,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         } as any);
         this.restoreSession();
         this.postChangeSet();
+        this.postGatewayStatus();
         break;
       }
       case "send": {
         if (this.running) return;
+        if (!this.isGatewayReady) {
+          this.post({ type: "error", message: "Cannot send message: Local gateway is not ready." });
+          return;
+        }
         this.running = true;
         this.abort = new AbortController();
         try {

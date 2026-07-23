@@ -4,8 +4,9 @@ import { initDatabase } from "./db.js";
 import { checkModelPolicy } from "./policyEngine.js";
 import { recordUsage } from "./usageLogger.js";
 import adminRoutes from "./admin/routes.js";
+import { getOrGenerateAdminKey, getAdminKeyPath } from "./adminKey.js";
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const OPENROUTER_URL = process.env.OPENROUTER_URL || "https://openrouter.ai/api/v1/chat/completions";
 const PORT: number = Number(process.env.PORT) || 8080;
 
 const app = express();
@@ -207,5 +208,6 @@ app.use("/admin", adminRoutes);
 app.listen(PORT, () => {
   console.log(`Pixa gateway (BYOK, Phase 4+5) listening on http://localhost:${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/healthz`);
-  console.log(`Admin API: http://localhost:${PORT}/admin (requires ADMIN_API_KEY)`);
+  const adminKey = getOrGenerateAdminKey();
+  console.log(`Admin API: http://localhost:${PORT}/admin (requires API key from ${getAdminKeyPath()})`);
 });

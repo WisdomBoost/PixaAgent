@@ -5,23 +5,20 @@ import {
   getAllowedModelsForIdentity,
   getBlockedModelsForIdentity,
 } from "../policyEngine.js";
+import { getOrGenerateAdminKey } from "../adminKey.js";
 
 const router = Router();
 
 /**
- * All admin endpoints require a simple API key check (configurable via
- * ADMIN_API_KEY env var for now — upgrade to JWT/OAuth in production).
+ * All admin endpoints require a simple API key check.
+ * Checks for a dynamically generated key in ~/.pixa/admin.key.
  *
  * Clients must send: Authorization: Bearer <ADMIN_API_KEY>
  */
 function requireAdminAuth(req: Request, res: Response, next: () => void): void {
   const auth = req.header("authorization") ?? "";
-  const expected = `Bearer ${process.env.ADMIN_API_KEY}`;
-
-  if (!process.env.ADMIN_API_KEY) {
-    res.status(500).json({ error: "Admin API key not configured (ADMIN_API_KEY env var)." });
-    return;
-  }
+  const adminKey = getOrGenerateAdminKey();
+  const expected = `Bearer ${adminKey}`;
 
   if (auth !== expected) {
     res.status(401).json({ error: "Invalid or missing admin API key." });

@@ -287,6 +287,16 @@ button:hover { background: var(--vscode-button-hoverBackground); }
   font-family: inherit;
 }
 #input:focus { outline: 1px solid var(--vscode-focusBorder); }
+#input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--vscode-input-background);
+  color: var(--vscode-descriptionForeground);
+}
+#send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 #composer-actions { display: flex; justify-content: flex-end; gap: 6px; }
 #stop { background: var(--vscode-inputValidation-errorBorder, #c00); }
 

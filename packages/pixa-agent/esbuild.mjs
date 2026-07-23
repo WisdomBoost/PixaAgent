@@ -14,6 +14,15 @@ const copyAssets = {
       if (existsSync("models.json")) {
         cpSync("models.json", "dist/models.json");
       }
+      // Copy compiled gateway if it exists in the monorepo sibling (without node_modules)
+      const gatewayDist = "../gateway/dist";
+      if (existsSync(gatewayDist)) {
+        mkdirSync("dist/gateway", { recursive: true });
+        cpSync(gatewayDist, "dist/gateway", { recursive: true });
+        if (existsSync("../gateway/package.json")) {
+          cpSync("../gateway/package.json", "dist/gateway/package.json");
+        }
+      }
     });
   },
 };

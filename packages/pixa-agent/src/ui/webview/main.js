@@ -107,6 +107,24 @@
       case "api-key-status":
         $("api-key-warning").classList.toggle("hidden", msg.hasApiKey);
         break;
+      case "gateway-status": {
+        const ready = msg.ready;
+        const error = msg.error;
+        if (ready) {
+          inputEl.disabled = false;
+          sendBtn.disabled = false;
+          inputEl.placeholder = "Describe a task… @file.ts attaches a file (Enter to send, Shift+Enter for newline)";
+        } else if (error) {
+          inputEl.disabled = true;
+          sendBtn.disabled = true;
+          inputEl.placeholder = "Gateway error. See 'Pixa Gateway' output channel.";
+        } else {
+          inputEl.disabled = true;
+          sendBtn.disabled = true;
+          inputEl.placeholder = "Starting local gateway...";
+        }
+        break;
+      }
       case "gateway-url-changed":
         $("gateway-url-text").textContent = msg.gatewayUrl || "";
         break;

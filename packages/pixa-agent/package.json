@@ -123,11 +123,6 @@
             }
           }
         },
-        "pixa.gatewayUrl": {
-          "type": "string",
-          "default": "http://localhost:8080/v1/chat",
-          "description": "Full URL of the Pixa gateway chat endpoint (e.g. http://localhost:8080/v1/chat)."
-        },
         "pixa.maxTokens": {
           "type": "number",
           "default": 8192,

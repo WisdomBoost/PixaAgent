@@ -23,6 +23,7 @@ import { DEFAULT_GATEWAY_URL, OPENROUTER_API_KEY_SECRET } from "./config";
 import { providersToModels, chatCompletionsUrl, type ProvidersConfig } from "./providers/config";
 import type { ModelEntry } from "./providers/types";
 import { providerSecretKey } from "./providers/secretKeys";
+import { ensureGatewayRunning, deactivateGateway } from "./gatewayProcess";
 
 /**
  * Register a client for every provider the user declared in `pixa.providers`,
@@ -300,6 +301,19 @@ export function activate(context: vscode.ExtensionContext): void {
     workspaceRoot
   );
 
+  const gatewayUrl = resolveGatewayUrl();
+  void (async () => {
+    log(`[GATEWAY] Initializing gateway check at ${gatewayUrl}...`);
+    const res = await ensureGatewayRunning(context, gatewayUrl, log);
+    if (res.ok) {
+      log("[GATEWAY] Gateway is running and responsive.");
+      chatProvider.setGatewayReady(true);
+    } else {
+      log(`[GATEWAY] Failed to establish gateway connection: ${res.error}`);
+      chatProvider.setGatewayError(res.error || "Local gateway failed to start.");
+    }
+  })();
+
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("pixa.chat", chatProvider, {
       webviewOptions: { retainContextWhenHidden: true },
@@ -308,4 +322,6 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 }
 
-export function deactivate(): void { }
+export function deactivate(): void {
+  deactivateGateway((msg) => console.log(msg));
+}

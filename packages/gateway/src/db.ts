@@ -1,13 +1,14 @@
 import Database from "better-sqlite3";
 import * as path from "node:path";
 import * as fs from "node:fs";
+import * as os from "node:os";
 
 /**
  * Central SQLite database for usage logging and policy configuration.
- * Path is configurable via USAGE_DB_PATH for production; defaults to
- * ./data/gateway.db for development.
+ * Path is configurable via USAGE_DB_PATH for production/tests; defaults to
+ * ~/.pixa/gateway.db for zero-config.
  */
-const DB_PATH = process.env.USAGE_DB_PATH || path.join(process.cwd(), "data", "gateway.db");
+const DB_PATH = process.env.USAGE_DB_PATH || path.join(os.homedir(), ".pixa", "gateway.db");
 
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
