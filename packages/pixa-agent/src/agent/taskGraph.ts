@@ -41,10 +41,60 @@ const PARALLEL_SAFE_TOOLS: ReadonlySet<string> = new Set([
  */
 export function looksLikeUnparsedToolCall(content: string): boolean {
   const t = content.trim();
-  if (!t.startsWith("{") || t.length > 2000) return false;
+  // A single object ({...}) or an array of them ([...]); reject prose and huge blobs.
+  if (!(t.startsWith("{") || t.startsWith("[")) || t.length > 2000) return false;
   // Match the two shapes these models produce: OpenAI-style {"name":...,
   // "arguments":...} and the bare {"function":...} variant.
   return /"(name|function)"\s*:/.test(t) && /"(arguments|parameters)"\s*:/.test(t);
+}
+
+/** A tool call recovered from text; `arguments` is a raw JSON string like ToolCall.arguments. */
+export interface ParsedToolCall {
+  name: string;
+  arguments: string;
+}
+
+/**
+ * Turn a text-form tool call into executable calls. Some runtimes (e.g. Ollama
+ * with qwen2.5-coder) return a valid call as JSON text in `content` instead of
+ * the native tool_calls field; this recovers it.
+ *
+ * Safety: only calls naming a tool in `knownToolNames` are returned — a
+ * hallucinated or non-existent tool is dropped, so we never act on garbage.
+ * Everything downstream (diff approval, command prompts) is unchanged. Never
+ * throws; returns [] for anything that isn't a well-formed call to a real tool.
+ */
+export function parseTextToolCalls(content: string, knownToolNames: ReadonlySet<string>): ParsedToolCall[] {
+  if (!looksLikeUnparsedToolCall(content)) return [];
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content.trim());
+  } catch {
+    return [];
+  }
+
+  const items = Array.isArray(parsed) ? parsed : [parsed];
+  const calls: ParsedToolCall[] = [];
+  for (const item of items) {
+    const call = normalizeTextCall(item);
+    if (call && knownToolNames.has(call.name)) calls.push(call);
+  }
+  return calls;
+}
+
+/** Normalize the bare ({name,arguments}) and wrapped ({function:{...}}) shapes to a ParsedToolCall. */
+function normalizeTextCall(item: unknown): ParsedToolCall | null {
+  if (!item || typeof item !== "object") return null;
+  const obj = item as Record<string, unknown>;
+  const fn = obj.function && typeof obj.function === "object" ? (obj.function as Record<string, unknown>) : obj;
+
+  const name = typeof fn.name === "string" ? fn.name.trim() : "";
+  if (!name) return null;
+
+  const rawArgs = fn.arguments ?? fn.parameters ?? {};
+  const args = typeof rawArgs === "string" ? rawArgs : JSON.stringify(rawArgs);
+  return { name, arguments: args };
 }
 
 export function isParallelSafe(toolName: string): boolean {
