@@ -101,7 +101,10 @@
           modelSelect.appendChild(opt);
         }
         $("api-key-warning").classList.toggle("hidden", msg.hasApiKey);
-        $("gateway-url-text").textContent = msg.gatewayUrl || "";
+        const urlTextEl = $("gateway-url-text");
+        if (urlTextEl) {
+          urlTextEl.textContent = msg.gatewayUrl || "";
+        }
         break;
       }
       case "api-key-status":
@@ -125,9 +128,13 @@
         }
         break;
       }
-      case "gateway-url-changed":
-        $("gateway-url-text").textContent = msg.gatewayUrl || "";
+      case "gateway-url-changed": {
+        const urlTextEl = $("gateway-url-text");
+        if (urlTextEl) {
+          urlTextEl.textContent = msg.gatewayUrl || "";
+        }
         break;
+      }
       case "transcript": {
         clearMessages();
         for (const entry of msg.entries) {
@@ -467,10 +474,6 @@
   $("set-key-link").addEventListener("click", (e) => {
     e.preventDefault();
     vscode.postMessage({ type: "set-api-key" });
-  });
-  $("set-gateway-link").addEventListener("click", (e) => {
-    e.preventDefault();
-    vscode.postMessage({ type: "set-gateway-url" });
   });
 
   $("show-providers").addEventListener("click", () => {
