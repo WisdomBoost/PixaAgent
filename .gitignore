@@ -6,5 +6,9 @@ out/
 ide/.build/
 ide/vscode/
 
+# Pixa's local semantic-search index — generated per workspace, never committed
+.pixa/
+
 # Local progress tracker — not for git
 PROGRESS.md
+packages/pixa-agent/README.md

@@ -209,6 +209,26 @@
         setRunning(false);
         currentAssistantEl = null;
         break;
+      case "providers":
+        renderProviders(msg.list);
+        break;
+      case "fetched-models":
+        renderFetchedModels(msg.models);
+        break;
+      case "fetch-models-failed":
+        setFetchStatus(msg.reason + " — enter model ids manually below.");
+        break;
+      case "provider-saved":
+        $("provider-error").classList.add("hidden");
+        $("pf-reload-banner").classList.remove("hidden");
+        resetProviderForm();
+        break;
+      case "provider-error":
+        $("provider-error").textContent = msg.message;
+        $("provider-error").classList.remove("hidden");
+        break;
+      case "provider-deleted":
+        break;
     }
   });
 
@@ -222,13 +242,22 @@
       row.className = "cs-row cs-" + f.status;
       const actions =
         f.status === "pending"
-          ? '<button data-a="open-diff">Diff</button><button data-a="apply">Apply</button><button data-a="reject">Reject</button>'
+          ? '<button data-a="open-diff">Review</button><button data-a="apply">Apply</button><button data-a="reject">Reject</button>'
           : f.status === "applied"
             ? '<em>applied</em> <button data-a="revert">Revert</button>'
             : "<em>" + f.status + "</em>";
+      // The filename is clickable for pending files — the natural "show me the
+      // change" gesture opens the diff, so reviewing before Apply is obvious.
+      const pathClickable = f.status === "pending";
       row.innerHTML =
-        '<span class="cs-dot"></span><span class="cs-path" title="' + escapeHtml(f.path) + '">' +
+        '<span class="cs-dot"></span><span class="cs-path' + (pathClickable ? " cs-path-clickable" : "") +
+        '" title="' + escapeHtml(pathClickable ? "Click to review this change" : f.path) + '">' +
         escapeHtml(f.path) + '</span><span class="cs-actions">' + actions + "</span>";
+      if (pathClickable) {
+        row.querySelector(".cs-path").addEventListener("click", () =>
+          vscode.postMessage({ type: "changeset-action", path: f.path, action: "open-diff" })
+        );
+      }
       row.querySelectorAll("button").forEach((btn) => {
         btn.addEventListener("click", () =>
           vscode.postMessage({ type: "changeset-action", path: f.path, action: btn.dataset.a })
@@ -262,6 +291,112 @@
       });
       list.appendChild(row);
     }
+  }
+
+  /* ---------- providers view ---------- */
+
+  // Mirrors src/providers/providerForm.ts's PRESETS. Duplicated deliberately:
+  // the webview is plain JS, not bundled with the TS extension host, so
+  // there's no shared-import path without adding a build step for four
+  // short entries. Keep the two lists in sync if presets change.
+  const PRESET_CARDS = [
+    { id: "ollama", label: "Ollama", baseUrl: "http://localhost:11434/v1", requiresApiKey: false },
+    { id: "lmstudio", label: "LM Studio", baseUrl: "http://localhost:1234/v1", requiresApiKey: false },
+    { id: "vllm", label: "vLLM", baseUrl: "http://localhost:8000/v1", requiresApiKey: false },
+    { id: "nvidia", label: "NVIDIA NIM", baseUrl: "https://integrate.api.nvidia.com/v1", requiresApiKey: true },
+  ];
+
+  function renderProviders(list) {
+    const el = $("providers-list");
+    el.innerHTML = "";
+    if (list.length === 0) {
+      el.innerHTML =
+        '<div class="providers-empty">No providers configured. Pixa\'s built-in models require an ' +
+        "OpenRouter key — add a provider below to use your own endpoint or a local model.</div>";
+      return;
+    }
+    for (const p of list) {
+      const row = document.createElement("div");
+      row.className = "provider-row";
+      row.innerHTML =
+        '<div class="provider-main"><div class="provider-name">' + escapeHtml(p.name) +
+        '</div><div class="provider-meta">' + escapeHtml(p.baseUrl) + " · " + p.modelCount +
+        " model" + (p.modelCount === 1 ? "" : "s") +
+        '</div></div><button class="provider-delete" title="Delete provider">✕</button>';
+      row.querySelector(".provider-delete").addEventListener("click", () => {
+        vscode.postMessage({ type: "delete-provider", id: p.id });
+      });
+      el.appendChild(row);
+    }
+  }
+
+  function renderPresetCards() {
+    const el = $("preset-cards");
+    el.innerHTML = "";
+    for (const preset of PRESET_CARDS) {
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "preset-card";
+      card.textContent = preset.label;
+      card.addEventListener("click", () => fillPresetForm(preset));
+      el.appendChild(card);
+    }
+    const orCard = document.createElement("button");
+    orCard.type = "button";
+    orCard.className = "preset-card";
+    orCard.textContent = "OpenRouter";
+    orCard.title = "OpenRouter is built in — this opens the API key setup instead of the form below.";
+    orCard.addEventListener("click", () => vscode.postMessage({ type: "set-api-key" }));
+    el.appendChild(orCard);
+  }
+
+  function fillPresetForm(preset) {
+    $("pf-id").value = preset.id;
+    $("pf-name").value = preset.label;
+    $("pf-baseurl").value = preset.baseUrl;
+    $("pf-requires-key").checked = preset.requiresApiKey;
+    $("pf-apikey-row").classList.toggle("hidden", !preset.requiresApiKey);
+    $("pf-fetched-list").innerHTML = "";
+    $("pf-manual-list").innerHTML = "";
+    setFetchStatus("");
+    addManualModelRow("", "");
+  }
+
+  function resetProviderForm() {
+    $("provider-form").reset();
+    $("pf-apikey-row").classList.add("hidden");
+    $("pf-fetched-list").innerHTML = "";
+    $("pf-manual-list").innerHTML = "";
+    setFetchStatus("");
+    addManualModelRow("", "");
+  }
+
+  function addManualModelRow(id, name) {
+    const row = document.createElement("div");
+    row.className = "pf-manual-row";
+    row.innerHTML =
+      '<input class="pf-manual-id" placeholder="model-id" value="' + escapeHtml(id || "") + '">' +
+      '<input class="pf-manual-name" placeholder="Display name (optional)" value="' + escapeHtml(name || "") + '">' +
+      '<button type="button" class="pf-remove-row">✕</button>';
+    row.querySelector(".pf-remove-row").addEventListener("click", () => row.remove());
+    $("pf-manual-list").appendChild(row);
+  }
+
+  function renderFetchedModels(models) {
+    const el = $("pf-fetched-list");
+    el.innerHTML = "";
+    for (const id of models) {
+      const row = document.createElement("label");
+      row.className = "pf-fetched-row";
+      row.innerHTML =
+        '<input type="checkbox" class="pf-fetched-checkbox" value="' + escapeHtml(id) + '" checked> ' + escapeHtml(id);
+      el.appendChild(row);
+    }
+    setFetchStatus(models.length + " model(s) found — uncheck any you don't want.");
+  }
+
+  function setFetchStatus(text) {
+    $("pf-fetch-status").textContent = text;
   }
 
   /* ---------- user actions ---------- */
@@ -311,6 +446,50 @@
     e.preventDefault();
     vscode.postMessage({ type: "set-api-key" });
   });
+
+  $("show-providers").addEventListener("click", () => {
+    $("providers-panel").classList.toggle("hidden");
+    vscode.postMessage({ type: "list-providers" });
+  });
+  $("close-providers").addEventListener("click", () => $("providers-panel").classList.add("hidden"));
+  $("pf-requires-key").addEventListener("change", () => {
+    $("pf-apikey-row").classList.toggle("hidden", !$("pf-requires-key").checked);
+  });
+  $("pf-fetch-models").addEventListener("click", () => {
+    const baseUrl = $("pf-baseurl").value.trim();
+    if (!baseUrl) {
+      setFetchStatus("Enter a base URL first.");
+      return;
+    }
+    setFetchStatus("Fetching…");
+    const apiKey = $("pf-apikey").value.trim();
+    vscode.postMessage({ type: "fetch-models", baseUrl, apiKey: apiKey || undefined });
+  });
+  $("pf-add-model-row").addEventListener("click", () => addManualModelRow("", ""));
+  $("pf-reload-btn").addEventListener("click", () => vscode.postMessage({ type: "reload-window" }));
+  $("provider-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const models = [];
+    document.querySelectorAll(".pf-fetched-checkbox:checked").forEach((cb) => models.push({ id: cb.value }));
+    document.querySelectorAll(".pf-manual-row").forEach((row) => {
+      const id = row.querySelector(".pf-manual-id").value.trim();
+      if (!id) return;
+      const name = row.querySelector(".pf-manual-name").value.trim();
+      models.push(name ? { id, name } : { id });
+    });
+    vscode.postMessage({
+      type: "save-provider",
+      id: $("pf-id").value.trim(),
+      name: $("pf-name").value.trim(),
+      baseUrl: $("pf-baseurl").value.trim(),
+      requiresApiKey: $("pf-requires-key").checked,
+      apiKey: $("pf-apikey").value.trim() || undefined,
+      models,
+    });
+  });
+
+  renderPresetCards();
+  addManualModelRow("", "");
 
   vscode.postMessage({ type: "ready" });
 })();

@@ -4,6 +4,23 @@ import type { ChatRequest, ChatResult, ModelProvider, StreamDelta } from "./type
 
 const LRU_MAX = 2000;
 
+/**
+ * True when an error is "the optional local embedding model isn't installed".
+ * @huggingface/transformers ships unbundled (150MB+ with a native binary), so
+ * this is the expected state on a fresh install, not a fault — callers use it
+ * to degrade quietly instead of alarming the user.
+ *
+ * Both codes matter: vectra require()s the package (CJS -> MODULE_NOT_FOUND)
+ * while this module await import()s it (ESM -> ERR_MODULE_NOT_FOUND).
+ */
+export function isMissingOptionalEmbeddingDep(err: any): boolean {
+  const code = err?.code;
+  return (
+    (code === "MODULE_NOT_FOUND" || code === "ERR_MODULE_NOT_FOUND") &&
+    /@huggingface\/transformers/.test(err?.message ?? "")
+  );
+}
+
 class LruCache<V> {
   private readonly map = new Map<string, V>();
   private readonly max: number;

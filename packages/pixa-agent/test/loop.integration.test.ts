@@ -155,7 +155,7 @@ describe("agent loop end-to-end (scripted provider, real tools)", () => {
     const provider = new FakeProvider([
       {
         content: "",
-        toolCalls: [{ id: "c1", name: "run_command", arguments: JSON.stringify({ command: "rm -rf /" }) }],
+        toolCalls: [{ id: "c1", name: "run_command", arguments: JSON.stringify({ command: "npm run deploy" }) }],
         finishReason: "tool_calls",
       },
       { content: "Understood, I won't run it.", toolCalls: [], finishReason: "stop" },

@@ -6,7 +6,7 @@ import type { ToolContext } from "../tools/types";
 import { pruneHistory } from "./contextManager";
 import { buildSystemPrompt, type WorkspaceInfo } from "./systemPrompt";
 import { parsePlan } from "./planning";
-import { groupIntoBatches } from "./taskGraph";
+import { groupIntoBatches, looksLikeUnparsedToolCall, parseTextToolCalls } from "./taskGraph";
 
 const MAX_ITERATIONS = 30;
 const RESERVE_TOKENS = 8000;
@@ -214,9 +214,33 @@ export class AgentLoop {
         }
 
         if (result.toolCalls.length === 0) {
-          this.history.push({ role: "assistant", content: result.content });
-          ctx.emit({ type: "assistant-done" });
-          return;
+          // Some runtimes (e.g. Ollama with qwen2.5-coder) return a valid tool
+          // call as JSON text in `content` instead of the native tool_calls
+          // field. Recover it — but only for tools that actually exist — so
+          // local coding models can run agent tasks. If nothing valid parses
+          // (unknown tool, or just a JSON-shaped answer), fall through and show
+          // the content as a normal reply.
+          if (entry.supportsTools && looksLikeUnparsedToolCall(result.content)) {
+            const knownTools = new Set(tools.schemas().map((s) => s.name));
+            const recovered = parseTextToolCalls(result.content, knownTools);
+            if (recovered.length > 0) {
+              result.toolCalls = recovered.map((c, i) => ({
+                id: `text-call-${iteration}-${i}`,
+                name: c.name,
+                arguments: c.arguments,
+              }));
+              result.content = ""; // extracted as a call — don't also render it as text
+              // fall through to the execution block below (do NOT return)
+            } else {
+              this.history.push({ role: "assistant", content: result.content });
+              ctx.emit({ type: "assistant-done" });
+              return;
+            }
+          } else {
+            this.history.push({ role: "assistant", content: result.content });
+            ctx.emit({ type: "assistant-done" });
+            return;
+          }
         }
 
         this.history.push({

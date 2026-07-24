@@ -258,6 +258,9 @@ button:hover { background: var(--vscode-button-hoverBackground); }
 .cs-rejected .cs-dot { background: var(--vscode-charts-red, #f44747); }
 .cs-reverted .cs-dot { background: var(--vscode-descriptionForeground); }
 .cs-path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.changeset-hint { font-weight: 400; font-size: 0.85em; color: var(--vscode-descriptionForeground); }
+.cs-path-clickable { cursor: pointer; }
+.cs-path-clickable:hover { color: var(--vscode-textLink-foreground); text-decoration: underline; }
 .cs-actions { display: flex; gap: 4px; }
 .cs-actions button { padding: 2px 6px; font-size: 0.85em; }
 
@@ -288,3 +291,90 @@ button:hover { background: var(--vscode-button-hoverBackground); }
 #stop { background: var(--vscode-inputValidation-errorBorder, #c00); }
 
 .hidden { display: none !important; }
+
+/* ---------- providers panel ---------- */
+#providers-panel {
+  position: absolute;
+  inset: 39px 0 0 0;
+  background: var(--vscode-sideBar-background);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+}
+#providers-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+#providers-body { overflow-y: auto; flex: 1; padding: 10px; }
+.section-title {
+  font-size: 0.75em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--vscode-descriptionForeground);
+  margin: 14px 0 6px;
+}
+.providers-empty { color: var(--vscode-descriptionForeground); font-style: italic; font-size: 0.9em; }
+.provider-row {
+  display: flex;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  gap: 6px;
+}
+.provider-main { flex: 1; min-width: 0; }
+.provider-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.provider-meta { font-size: 0.8em; color: var(--vscode-descriptionForeground); }
+.provider-delete {
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  padding: 2px 6px;
+}
+.provider-delete:hover { color: var(--vscode-errorForeground); background: transparent; }
+
+#preset-cards { display: flex; flex-wrap: wrap; gap: 6px; }
+.preset-card {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  font-size: 0.85em;
+  padding: 6px 10px;
+}
+.preset-card:hover { background: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-secondaryBackground)); }
+
+#provider-form { display: flex; flex-direction: column; gap: 8px; }
+#provider-form label { display: flex; flex-direction: column; gap: 3px; font-size: 0.85em; color: var(--vscode-descriptionForeground); }
+#provider-form label.pf-checkbox { flex-direction: row; align-items: center; gap: 6px; }
+#provider-form input:not([type="checkbox"]) {
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 4px;
+  padding: 5px 6px;
+  font-family: inherit;
+}
+#provider-error {
+  color: var(--vscode-errorForeground);
+  background: var(--vscode-inputValidation-errorBackground, rgba(200,0,0,0.15));
+  border: 1px solid var(--vscode-inputValidation-errorBorder, #c00);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 0.85em;
+}
+.pf-fetch-row { display: flex; align-items: center; gap: 8px; }
+#pf-fetch-status { font-size: 0.8em; color: var(--vscode-descriptionForeground); }
+.pf-fetched-row, .pf-manual-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 0.9em; }
+.pf-manual-row input { flex: 1; }
+#pf-reload-banner {
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-focusBorder);
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}

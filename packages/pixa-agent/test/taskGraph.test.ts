@@ -1,4 +1,106 @@
 import { describe, it, expect } from "vitest";
+import { looksLikeUnparsedToolCall, parseTextToolCalls } from "../src/agent/taskGraph";
+
+/**
+ * Small local models advertise tool support, then write the tool call as prose.
+ * The strings below are REAL observed output: the first from qwen2.5-coder:1.5b
+ * via Ollama, the second from the same model in the chat panel.
+ */
+describe("looksLikeUnparsedToolCall", () => {
+  it("detects the malformed blob a 1.5B model returns", () => {
+    expect(looksLikeUnparsedToolCall('{"name": "", "arguments": {}}')).toBe(true);
+  });
+
+  it("detects a populated but text-only tool call", () => {
+    expect(looksLikeUnparsedToolCall('{"name": "semantic_search", "arguments": {"query": "hello"}}')).toBe(true);
+  });
+
+  it("ignores ordinary prose answers", () => {
+    expect(looksLikeUnparsedToolCall("This project is a VS Code extension.")).toBe(false);
+    expect(looksLikeUnparsedToolCall("")).toBe(false);
+  });
+
+  it("ignores JSON the user legitimately asked for", () => {
+    expect(looksLikeUnparsedToolCall('{"port": 8080, "host": "localhost"}')).toBe(false);
+  });
+
+  it("ignores a long JSON document that merely mentions the keys", () => {
+    const long = '{"name": "x", "arguments": "y", "pad": "' + "z".repeat(2100) + '"}';
+    expect(looksLikeUnparsedToolCall(long)).toBe(false);
+  });
+});
+
+/**
+ * parseTextToolCalls turns a text-form tool call (what Ollama surfaces for
+ * qwen2.5-coder etc.) into executable calls — but only for tools that exist.
+ */
+describe("parseTextToolCalls", () => {
+  const known = new Set(["list_directory", "read_file", "search_workspace"]);
+
+  it("parses the real qwen2.5-coder:7b output into one call", () => {
+    // Exact string captured from Ollama 0.32.1.
+    const calls = parseTextToolCalls('{"name": "list_directory", "arguments": {"path": "./"}}', known);
+    expect(calls).toEqual([{ name: "list_directory", arguments: '{"path":"./"}' }]);
+  });
+
+  it("parses the wrapped {function:{...}} shape", () => {
+    const calls = parseTextToolCalls('{"function": {"name": "read_file", "arguments": {"path": "a.ts"}}}', known);
+    expect(calls).toEqual([{ name: "read_file", arguments: '{"path":"a.ts"}' }]);
+  });
+
+  it("passes through arguments already given as a JSON string", () => {
+    const calls = parseTextToolCalls('{"name": "read_file", "arguments": "{\\"path\\":\\"a.ts\\"}"}', known);
+    expect(calls).toEqual([{ name: "read_file", arguments: '{"path":"a.ts"}' }]);
+  });
+
+  it("accepts 'parameters' as an alias for 'arguments'", () => {
+    const calls = parseTextToolCalls('{"name": "read_file", "parameters": {"path": "a.ts"}}', known);
+    expect(calls).toEqual([{ name: "read_file", arguments: '{"path":"a.ts"}' }]);
+  });
+
+  it("defaults absent arguments to an empty object", () => {
+    const calls = parseTextToolCalls('{"name": "list_directory", "arguments": {}}', known);
+    expect(calls).toEqual([{ name: "list_directory", arguments: "{}" }]);
+  });
+
+  it("parses an array of calls in order", () => {
+    const calls = parseTextToolCalls(
+      '[{"name":"list_directory","arguments":{}},{"name":"read_file","arguments":{"path":"a.ts"}}]',
+      known
+    );
+    expect(calls.map((c) => c.name)).toEqual(["list_directory", "read_file"]);
+  });
+
+  it("drops calls naming a tool that does not exist", () => {
+    expect(parseTextToolCalls('{"name": "delete_everything", "arguments": {}}', known)).toEqual([]);
+  });
+
+  it("keeps only the known call from a mixed array", () => {
+    const calls = parseTextToolCalls(
+      '[{"name":"read_file","arguments":{"path":"a.ts"}},{"name":"nope","arguments":{}}]',
+      known
+    );
+    expect(calls.map((c) => c.name)).toEqual(["read_file"]);
+  });
+
+  it("returns [] for non-call JSON that fails the shape gate", () => {
+    expect(parseTextToolCalls('{"port": 8080, "host": "localhost"}', known)).toEqual([]);
+  });
+
+  it("returns [] for a legit JSON answer whose tool name is unknown", () => {
+    // Has name+arguments keys (passes shape gate) but names no real tool.
+    expect(parseTextToolCalls('{"name": "config", "arguments": {"debug": true}}', known)).toEqual([]);
+  });
+
+  it("returns [] for malformed JSON without throwing", () => {
+    expect(parseTextToolCalls('{"name": "read_file", "arguments":', known)).toEqual([]);
+  });
+
+  it("returns [] for plain prose and empty input", () => {
+    expect(parseTextToolCalls("Here are the files in your project.", known)).toEqual([]);
+    expect(parseTextToolCalls("", known)).toEqual([]);
+  });
+});
 import { isParallelSafe, groupIntoBatches } from "../src/agent/taskGraph";
 import type { ChatResult, ModelEntry, ModelProvider, ToolCall } from "../src/providers/types";
 import { AgentLoop } from "../src/agent/loop";

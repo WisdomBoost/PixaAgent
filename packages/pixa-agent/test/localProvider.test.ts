@@ -89,7 +89,7 @@ describe("self-hosted OpenAI-compatible provider", () => {
     const deltas: string[] = [];
     const result = await localProvider().chat(
       { ...basicReq, maxTokens: 256 },
-      (d) => deltas.push(d.text!),
+      (d) => deltas.push(d.text ?? ""),
       new AbortController().signal
     );
 

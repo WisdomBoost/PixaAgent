@@ -3,7 +3,12 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { loadModels, ProviderRegistry } from "./providers/registry";
 import { OpenRouterProvider } from "./providers/openrouter";
-import { LocalEmbeddingsProvider, initEmbeddingCache, prewarmEmbeddingModel } from "./providers/embeddings";
+import {
+  LocalEmbeddingsProvider,
+  initEmbeddingCache,
+  prewarmEmbeddingModel,
+  isMissingOptionalEmbeddingDep,
+} from "./providers/embeddings";
 import { ToolRegistry, registerBuiltinTools } from "./tools/registry";
 import { ChangeSet } from "./edits/changeSet";
 import { EmbeddingIndex } from "./indexer/embeddingIndex";
@@ -16,22 +21,9 @@ import { McpManager } from "./mcp/manager";
 import type { McpServerConfig } from "./mcp/client";
 import { providersToModels, chatCompletionsUrl, type ProvidersConfig } from "./providers/config";
 import type { ModelEntry } from "./providers/types";
+import { providerSecretKey } from "./providers/secretKeys";
 
 const API_KEY_SECRET = "pixa.openrouter.apiKey";
-
-/** Secret-storage key holding the API key for a user-configured provider. */
-function providerSecretKey(providerId: string): string {
-  return `pixa.provider.${providerId}.apiKey`;
-}
-
-/**
- * True when indexing failed because the optional local embedding model
- * (@huggingface/transformers) isn't installed — expected on every fresh
- * install since it ships unbundled, not a real error.
- */
-function isMissingOptionalEmbeddingDep(err: any): boolean {
-  return err?.code === "MODULE_NOT_FOUND" && /@huggingface\/transformers/.test(err?.message ?? "");
-}
 
 /**
  * Register a client for every provider the user declared in `pixa.providers`,
