@@ -181,6 +181,16 @@ export class OpenRouterProvider implements ModelProvider {
     // Cost accounting is an OpenRouter extension; other OpenAI-compatible
     // servers may reject unknown fields, so only send it to OpenRouter.
     if (this.isOpenRouter) body.usage = { include: true };
+    // Reasoning-effort is likewise an OpenRouter-forwarded extension, and the
+    // caller (AgentLoop) only sets req.reasoningEffort when the resolved
+    // ModelEntry declared supportsReasoningEffort — so no default is sent and
+    // non-supporting models never see this field at all. OpenRouter's current
+    // schema nests it under `reasoning: { effort }` rather than a top-level
+    // `reasoning_effort` — reconfirm against their docs if requests start
+    // getting rejected, since this has changed shape before.
+    if (this.isOpenRouter && req.reasoningEffort) {
+      body.reasoning = { effort: req.reasoningEffort };
+    }
 
     // Combine the caller's abort signal with a connect timeout so a slow or
     // hung external host never blocks the UI indefinitely. 90s — large free-tier

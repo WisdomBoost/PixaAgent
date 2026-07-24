@@ -18,6 +18,8 @@ export interface UserModelConfig {
   contextWindow?: number;
   /** Set false for models that can't do tool calling (chat-only). Defaults to true. */
   supportsTools?: boolean;
+  /** Set true if this model/endpoint forwards a reasoning-effort setting. Defaults to false (unset). */
+  supportsReasoningEffort?: boolean;
 }
 
 export interface ProviderConfig {
@@ -85,6 +87,11 @@ export function providersToModels(cfg: ProvidersConfig): { models: ModelEntry[];
             ? model.contextWindow
             : DEFAULT_CONTEXT_WINDOW,
         supportsTools: model.supportsTools !== false,
+        // Only include when explicitly true — ModelEntry.supportsReasoningEffort
+        // is optional (boolean | undefined), where undefined means "unknown/not
+        // applicable". Emitting false for absent fields would be wrong, since
+        // that conflicts with models that actively declare non-support.
+        ...(model.supportsReasoningEffort === true ? { supportsReasoningEffort: true } : {}),
       });
     }
   }

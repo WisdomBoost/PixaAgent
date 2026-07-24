@@ -3,6 +3,7 @@ import * as crypto from "node:crypto";
 import * as path from "node:path";
 import * as os from "node:os";
 import type { ModelEntry } from "../providers/types";
+import type { ReasoningEffort } from "../providers/types";
 import { ProviderRegistry } from "../providers/registry";
 import { ToolRegistry } from "../tools/registry";
 import type { ApprovalService, ToolContext } from "../tools/types";
@@ -42,6 +43,7 @@ type WebviewMessage =
   | { type: "send"; text: string }
   | { type: "stop" }
   | { type: "selectModel"; modelId: string }
+  | { type: "selectReasoningEffort"; value: ReasoningEffort | null }
   | { type: "approval-response"; requestId: string; approved: boolean }
   | { type: "changeset-action"; path: string | null; action: "apply" | "reject" | "apply-all" | "open-diff" | "revert" }
   | { type: "new-session" }
@@ -69,6 +71,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
   private abort: AbortController | undefined;
   private pendingApprovals = new Map<string, (approved: boolean) => void>();
   private currentModelId: string;
+  /** User's chosen thinking level. Reset to null on every model switch (manual or auto-hop) — see chatViewProvider notes below. */
+  private currentReasoningEffort: ReasoningEffort | null = null;
   private running = false;
   private isGatewayReady = false;
   private gatewayErrorMsg: string | null = null;
@@ -102,6 +106,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         // working model, so the next message starts there directly.
         if (event.type === "active-model-changed") {
           this.currentModelId = event.modelId;
+          // The old reasoning-effort choice may not apply (or even be valid)
+          // for whatever model we just hopped to — drop it rather than risk
+          // silently forwarding a stale value. UI re-derives its own display
+          // state from this event too (see main.js's "active-model-changed").
+          this.currentReasoningEffort = null;
         }
         this.post(event);
       },
@@ -321,8 +330,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
           type: "init",
           models: this.models
             .filter((m) => m.provider !== "local-embeddings")
-            .map((m) => ({ id: m.id, label: m.label })),
+            .map((m) => ({ id: m.id, label: m.label, supportsReasoningEffort: !!m.supportsReasoningEffort })),
           currentModelId: this.currentModelId,
+          currentReasoningEffort: this.currentReasoningEffort,
           hasApiKey,
         } as any);
         this.restoreSession();
@@ -340,7 +350,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         this.abort = new AbortController();
         try {
           const text = await this.resolveMentions(msg.text);
-          await this.loop.run(text, this.currentModelId, this.abort.signal);
+          await this.loop.run(text, this.currentModelId, this.abort.signal, this.currentReasoningEffort ?? undefined);
         } catch (e) {
           // Without this catch, any failure here (bad/missing API key, gateway
           // unreachable, network error, etc.) was silently swallowed — the UI
@@ -368,8 +378,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
       case "selectModel":
         if (this.models.some((m) => m.id === msg.modelId && m.provider !== "local-embeddings")) {
           this.currentModelId = msg.modelId;
+          // A reasoning-effort choice is per-model context, not a durable
+          // preference — always drop it on switch rather than trying to
+          // remember it per model id (that path invites a UI/host state
+          // mismatch across the auto-hop case too). See main.js's mirrored reset.
+          this.currentReasoningEffort = null;
         }
         break;
+      case "selectReasoningEffort": {
+        const entry = this.models.find((m) => m.id === this.currentModelId);
+        this.currentReasoningEffort = entry?.supportsReasoningEffort ? msg.value : null;
+        break;
+      }
       case "approval-response": {
         const resolve = this.pendingApprovals.get(msg.requestId);
         if (resolve) {
@@ -623,6 +643,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
   <div id="app">
     <div id="header">
       <select id="model-select" title="Model"></select>
+      <select id="reasoning-select" class="hidden" title="Thinking effort"></select>
       <span id="session-cost" title="Total spend this session (from OpenRouter usage accounting)">$0.00</span>
       <button id="show-history" class="icon-btn" title="Chat history">🕘</button>
       <button id="new-session" class="icon-btn" title="New chat">＋</button>

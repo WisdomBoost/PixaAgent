@@ -42,7 +42,23 @@ export function resolveGatewayExecutable(context: vscode.ExtensionContext): {
   const devTsPath = path.join(context.extensionPath, "..", "gateway", "src", "server.ts");
 
   if (fs.existsSync(devTsPath)) {
-    return { command: "npx", args: ["tsx", devTsPath], cwd: path.dirname(path.dirname(devTsPath)) };
+    const gatewayDir = path.dirname(path.dirname(devTsPath));
+    // Prefer the locally-installed tsx binary over `npx tsx` — npx adds several
+    // seconds of resolution/download overhead on Windows that can push cold-start
+    // past the health-check timeout. The gateway package always has tsx as a
+    // devDependency, so node_modules/.bin/tsx should always be present.
+    const localTsxBin = process.platform === "win32"
+      ? path.join(gatewayDir, "node_modules", ".bin", "tsx.cmd")
+      : path.join(gatewayDir, "node_modules", ".bin", "tsx");
+    if (fs.existsSync(localTsxBin)) {
+      return {
+        command: localTsxBin,
+        args: [devTsPath],
+        cwd: gatewayDir,
+      };
+    }
+    // Fallback: npx tsx (requires shell on Windows so npx resolves correctly)
+    return { command: "npx", args: ["tsx", devTsPath], cwd: gatewayDir };
   } else if (fs.existsSync(prodBinPath)) {
     return { command: prodBinPath, args: [], cwd: path.dirname(prodBinPath) };
   } else if (fs.existsSync(binFolderBinPath)) {
@@ -98,8 +114,9 @@ export function startGateway(
     const options: child_process.SpawnOptions = {
       cwd: execConfig.cwd,
       env,
-      // Need shell=true for executing 'npx' on Windows
-      shell: execConfig.command === "npx" ? true : undefined,
+      // shell=true is only needed for npx (a batch script on Windows that CMD
+      // must interpret). Direct binary paths (.exe, .cmd, node) don't need it.
+      shell: execConfig.command === "npx" || execConfig.command.endsWith(".cmd") ? true : undefined,
     };
 
     gatewayProcess = child_process.spawn(execConfig.command, execConfig.args, options);
@@ -145,7 +162,7 @@ export function startGateway(
 /**
  * Ensures the gateway is running.
  * 1. Checks if it is already running. If yes, returns true immediately.
- * 2. If not, spawns the gateway and polls /healthz for up to 10 seconds.
+ * 2. If not, spawns the gateway and polls /healthz for up to 30 seconds.
  * 3. Monitors for early exit (e.g. port conflict / EADDRINUSE) and reports it immediately.
  * 4. Returns { ok: true } or { ok: false, error: string }.
  */
@@ -181,9 +198,12 @@ export async function ensureGatewayRunning(
     }
   });
 
-  // Poll healthz
+  // Poll healthz.
+  // 30s: tsx cold-start on Windows (TypeScript compilation + better-sqlite3
+  // native module load) regularly takes 15-25s on a warm disk cache, and even
+  // longer on a cold one. 10s was too tight for dev mode.
   const start = Date.now();
-  const timeoutMs = 10000; // 10s timeout
+  const timeoutMs = 30000;
   const pollInterval = 250;
 
   while (Date.now() - start < timeoutMs) {
