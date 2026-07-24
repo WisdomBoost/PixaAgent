@@ -1,0 +1,31 @@
+{
+    "name": "pixa-gateway",
+    "version": "0.2.0",
+    "description": "BYOK inference gateway with Phase 4 (usage logging) and Phase 5 (org policies) — no server-side keys, stateless proxy.",
+    "type": "module",
+    "main": "dist/server.js",
+    "scripts": {
+      "start": "tsx src/server.ts",
+      "dev": "tsx --watch src/server.ts",
+      "build": "tsc",
+      "typecheck": "tsc --noEmit",
+      "start:built": "node dist/server.js",
+      "test": "vitest run"
+    },
+    "engines": {
+      "node": ">=18.0.0"
+    },
+    "dependencies": {
+      "better-sqlite3": "^9.2.2",
+      "dotenv": "^16.6.1",
+      "express": "^4.22.2"
+    },
+    "devDependencies": {
+      "@types/better-sqlite3": "^7.6.11",
+      "@types/express": "^5.0.6",
+      "@types/node": "^20.19.43",
+      "tsx": "^4.23.1",
+      "typescript": "^5.9.3",
+      "vitest": "^2.1.0"
+    }
+  }

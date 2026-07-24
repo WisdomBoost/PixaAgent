@@ -28,6 +28,9 @@ export interface ToolSchema {
   parameters: object;
 }
 
+/** Thinking-effort setting some providers accept. See models.json's supportsReasoningEffort. */
+export type ReasoningEffort = "low" | "medium" | "high";
+
 export interface ChatRequest {
   model: string;
   messages: ChatMessage[];
@@ -39,6 +42,12 @@ export interface ChatRequest {
    * cannot afford (HTTP 402).
    */
   maxTokens?: number;
+  /**
+   * Only meaningful when the target model declares supportsReasoningEffort.
+   * Callers (AgentLoop) are responsible for omitting this when the resolved
+   * ModelEntry doesn't support it — providers forward whatever they're given.
+   */
+  reasoningEffort?: ReasoningEffort;
 }
 
 export interface StreamDelta {
@@ -78,4 +87,11 @@ export interface ModelEntry {
   slug: string;
   contextWindow: number;
   supportsTools: boolean;
+  /**
+   * Whether this model/provider combination forwards a reasoning-effort
+   * setting on OpenRouter. Capability flag only — never send reasoning_effort
+   * to a model that doesn't declare this, since some OpenAI-compatible
+   * servers reject unknown fields outright.
+   */
+  supportsReasoningEffort?: boolean;
 }

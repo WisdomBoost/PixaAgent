@@ -3,6 +3,7 @@ import * as crypto from "node:crypto";
 import * as path from "node:path";
 import * as os from "node:os";
 import type { ModelEntry } from "../providers/types";
+import type { ReasoningEffort } from "../providers/types";
 import { ProviderRegistry } from "../providers/registry";
 import { ToolRegistry } from "../tools/registry";
 import type { ApprovalService, ToolContext } from "../tools/types";
@@ -14,6 +15,7 @@ import { DiffPreview } from "./diffPreview";
 import { resolveInWorkspace } from "../tools/paths";
 import { parseMentions, formatAttachedFiles, type AttachedFile } from "../agent/mentions";
 import type { ChatMessage } from "../providers/types";
+import { OPENROUTER_API_KEY_SECRET } from "../config";
 import type { ProvidersConfig } from "../providers/config";
 import { validateProviderForm, parseModelsResponse, modelsEndpointUrl } from "../providers/providerForm";
 import { providerSecretKey } from "../providers/secretKeys";
@@ -41,6 +43,7 @@ type WebviewMessage =
   | { type: "send"; text: string }
   | { type: "stop" }
   | { type: "selectModel"; modelId: string }
+  | { type: "selectReasoningEffort"; value: ReasoningEffort | null }
   | { type: "approval-response"; requestId: string; approved: boolean }
   | { type: "changeset-action"; path: string | null; action: "apply" | "reject" | "apply-all" | "open-diff" | "revert" }
   | { type: "new-session" }
@@ -51,14 +54,14 @@ type WebviewMessage =
   | { type: "list-providers" }
   | { type: "fetch-models"; baseUrl: string; apiKey?: string }
   | {
-      type: "save-provider";
-      id: string;
-      name: string;
-      baseUrl: string;
-      requiresApiKey: boolean;
-      apiKey?: string;
-      models: { id: string; name?: string }[];
-    }
+    type: "save-provider";
+    id: string;
+    name: string;
+    baseUrl: string;
+    requiresApiKey: boolean;
+    apiKey?: string;
+    models: { id: string; name?: string }[];
+  }
   | { type: "delete-provider"; id: string }
   | { type: "reload-window" };
 
@@ -68,7 +71,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
   private abort: AbortController | undefined;
   private pendingApprovals = new Map<string, (approved: boolean) => void>();
   private currentModelId: string;
+  /** User's chosen thinking level. Reset to null on every model switch (manual or auto-hop) — see chatViewProvider notes below. */
+  private currentReasoningEffort: ReasoningEffort | null = null;
   private running = false;
+  private isGatewayReady = false;
+  private gatewayErrorMsg: string | null = null;
 
   constructor(
     private context: vscode.ExtensionContext,
@@ -99,6 +106,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         // working model, so the next message starts there directly.
         if (event.type === "active-model-changed") {
           this.currentModelId = event.modelId;
+          // The old reasoning-effort choice may not apply (or even be valid)
+          // for whatever model we just hopped to — drop it rather than risk
+          // silently forwarding a stale value. UI re-derives its own display
+          // state from this event too (see main.js's "active-model-changed").
+          this.currentReasoningEffort = null;
         }
         this.post(event);
       },
@@ -160,6 +172,30 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
     };
     view.webview.html = this.html(view.webview);
     view.webview.onDidReceiveMessage((msg: WebviewMessage) => void this.onMessage(msg));
+  }
+
+  setGatewayReady(ready: boolean): void {
+    this.isGatewayReady = ready;
+    this.gatewayErrorMsg = null;
+    this.postGatewayStatus();
+    if (ready) {
+      this.post({ type: "status", text: "Local gateway is connected and ready." });
+    }
+  }
+
+  setGatewayError(errorMsg: string): void {
+    this.isGatewayReady = false;
+    this.gatewayErrorMsg = errorMsg;
+    this.postGatewayStatus();
+    this.post({ type: "error", message: errorMsg });
+  }
+
+  postGatewayStatus(): void {
+    this.post({
+      type: "gateway-status",
+      ready: this.isGatewayReady,
+      error: this.gatewayErrorMsg || undefined,
+    });
   }
 
   newSession(): void {
@@ -289,26 +325,41 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
   private async onMessage(msg: WebviewMessage): Promise<void> {
     switch (msg.type) {
       case "ready": {
-        const hasApiKey = !!(await this.context.secrets.get("pixa.openrouter.apiKey"));
+        const hasApiKey = !!(await this.context.secrets.get(OPENROUTER_API_KEY_SECRET));
         this.post({
           type: "init",
           models: this.models
             .filter((m) => m.provider !== "local-embeddings")
-            .map((m) => ({ id: m.id, label: m.label })),
+            .map((m) => ({ id: m.id, label: m.label, supportsReasoningEffort: !!m.supportsReasoningEffort })),
           currentModelId: this.currentModelId,
+          currentReasoningEffort: this.currentReasoningEffort,
           hasApiKey,
         } as any);
         this.restoreSession();
         this.postChangeSet();
+        this.postGatewayStatus();
         break;
       }
       case "send": {
         if (this.running) return;
+        if (!this.isGatewayReady) {
+          this.post({ type: "error", message: "Cannot send message: Local gateway is not ready." });
+          return;
+        }
         this.running = true;
         this.abort = new AbortController();
         try {
           const text = await this.resolveMentions(msg.text);
-          await this.loop.run(text, this.currentModelId, this.abort.signal);
+          await this.loop.run(text, this.currentModelId, this.abort.signal, this.currentReasoningEffort ?? undefined);
+        } catch (e) {
+          // Without this catch, any failure here (bad/missing API key, gateway
+          // unreachable, network error, etc.) was silently swallowed — the UI
+          // just flipped back to idle with nothing shown. Surface it instead.
+          const isAbort = e instanceof Error && e.name === "AbortError";
+          if (!isAbort) {
+            const message = e instanceof Error ? e.message : String(e);
+            this.post({ type: "error", message });
+          }
         } finally {
           this.running = false;
           this.post({ type: "run-finished" } as any);
@@ -327,8 +378,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
       case "selectModel":
         if (this.models.some((m) => m.id === msg.modelId && m.provider !== "local-embeddings")) {
           this.currentModelId = msg.modelId;
+          // A reasoning-effort choice is per-model context, not a durable
+          // preference — always drop it on switch rather than trying to
+          // remember it per model id (that path invites a UI/host state
+          // mismatch across the auto-hop case too). See main.js's mirrored reset.
+          this.currentReasoningEffort = null;
         }
         break;
+      case "selectReasoningEffort": {
+        const entry = this.models.find((m) => m.id === this.currentModelId);
+        this.currentReasoningEffort = entry?.supportsReasoningEffort ? msg.value : null;
+        break;
+      }
       case "approval-response": {
         const resolve = this.pendingApprovals.get(msg.requestId);
         if (resolve) {
@@ -354,7 +415,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
         break;
       case "set-api-key": {
         await vscode.commands.executeCommand("pixa.setApiKey");
-        const hasApiKey = !!(await this.context.secrets.get("pixa.openrouter.apiKey"));
+        const hasApiKey = !!(await this.context.secrets.get(OPENROUTER_API_KEY_SECRET));
         this.post({ type: "api-key-status", hasApiKey } as any);
         if (hasApiKey) this.post({ type: "status", text: "API key updated." });
         break;
@@ -582,6 +643,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, ApprovalSer
   <div id="app">
     <div id="header">
       <select id="model-select" title="Model"></select>
+      <select id="reasoning-select" class="hidden" title="Thinking effort"></select>
       <span id="session-cost" title="Total spend this session (from OpenRouter usage accounting)">$0.00</span>
       <button id="show-history" class="icon-btn" title="Chat history">🕘</button>
       <button id="new-session" class="icon-btn" title="New chat">＋</button>

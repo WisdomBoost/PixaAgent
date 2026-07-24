@@ -38,7 +38,8 @@
       "provider": "openrouter",
       "slug": "z-ai/glm-5.2",
       "contextWindow": 1048576,
-      "supportsTools": true
+      "supportsTools": true,
+      "supportsReasoningEffort": true
     },
     {
       "id": "claude",
@@ -54,7 +55,8 @@
       "provider": "openrouter",
       "slug": "openai/gpt-5.2-codex",
       "contextWindow": 400000,
-      "supportsTools": true
+      "supportsTools": true,
+      "supportsReasoningEffort": true
     },
     {
       "id": "qwen-coder",

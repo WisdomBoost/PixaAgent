@@ -8,11 +8,14 @@
   const sendBtn = $("send");
   const stopBtn = $("stop");
   const modelSelect = $("model-select");
+  const reasoningSelect = $("reasoning-select");
   const changesetEl = $("changeset");
   const changesetFiles = $("changeset-files");
 
   let currentAssistantEl = null;
   let running = false;
+  /** id -> model entry (as sent in "init"), used to decide whether to show the thinking selector. */
+  let modelsById = {};
 
   /* ---------- rendering helpers ---------- */
 
@@ -86,6 +89,35 @@
     stopBtn.classList.toggle("hidden", !state);
   }
 
+  /* ---------- thinking-effort selector ---------- */
+
+  const REASONING_OPTIONS = [
+    ["", "Thinking: Default"],
+    ["low", "Thinking: Low"],
+    ["medium", "Thinking: Medium"],
+    ["high", "Thinking: High"],
+  ];
+
+  function populateReasoningOptions() {
+    reasoningSelect.innerHTML = "";
+    for (const [value, label] of REASONING_OPTIONS) {
+      const opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = label;
+      reasoningSelect.appendChild(opt);
+    }
+  }
+
+  // Effort resets to "Default" on every model switch (see chatViewProvider.ts) —
+  // this only decides whether the control is visible for the model now selected,
+  // it never tries to remember a per-model value.
+  function updateReasoningVisibility(modelId) {
+    const entry = modelsById[modelId];
+    const supports = !!(entry && entry.supportsReasoningEffort);
+    reasoningSelect.classList.toggle("hidden", !supports);
+    reasoningSelect.value = "";
+  }
+
   /* ---------- events from extension host ---------- */
 
   window.addEventListener("message", (event) => {
@@ -93,19 +125,52 @@
     switch (msg.type) {
       case "init": {
         modelSelect.innerHTML = "";
+        modelsById = {};
         for (const m of msg.models) {
+          modelsById[m.id] = m;
           const opt = document.createElement("option");
           opt.value = m.id;
           opt.textContent = m.label;
           if (m.id === msg.currentModelId) opt.selected = true;
           modelSelect.appendChild(opt);
         }
+        updateReasoningVisibility(msg.currentModelId);
+        if (msg.currentReasoningEffort) reasoningSelect.value = msg.currentReasoningEffort;
         $("api-key-warning").classList.toggle("hidden", msg.hasApiKey);
+        const urlTextEl = $("gateway-url-text");
+        if (urlTextEl) {
+          urlTextEl.textContent = msg.gatewayUrl || "";
+        }
         break;
       }
       case "api-key-status":
         $("api-key-warning").classList.toggle("hidden", msg.hasApiKey);
         break;
+      case "gateway-status": {
+        const ready = msg.ready;
+        const error = msg.error;
+        if (ready) {
+          inputEl.disabled = false;
+          sendBtn.disabled = false;
+          inputEl.placeholder = "Describe a task… @file.ts attaches a file (Enter to send, Shift+Enter for newline)";
+        } else if (error) {
+          inputEl.disabled = true;
+          sendBtn.disabled = true;
+          inputEl.placeholder = "Gateway error. See 'Pixa Gateway' output channel.";
+        } else {
+          inputEl.disabled = true;
+          sendBtn.disabled = true;
+          inputEl.placeholder = "Starting local gateway...";
+        }
+        break;
+      }
+      case "gateway-url-changed": {
+        const urlTextEl = $("gateway-url-text");
+        if (urlTextEl) {
+          urlTextEl.textContent = msg.gatewayUrl || "";
+        }
+        break;
+      }
       case "transcript": {
         clearMessages();
         for (const entry of msg.entries) {
@@ -123,6 +188,10 @@
         break;
       case "active-model-changed":
         modelSelect.value = msg.modelId;
+        // The host also resets currentReasoningEffort to null on this event
+        // (see chatViewProvider.ts) — mirror it here so the visible selector
+        // never shows a stale choice for the model we just hopped to.
+        updateReasoningVisibility(msg.modelId);
         break;
       case "plan": {
         const items = msg.steps.map((s) => "<li>" + escapeHtml(s.text) + "</li>").join("");
@@ -191,9 +260,9 @@
           msg.requestCostUsd === null
             ? "usage: " + msg.promptTokens + " in / " + msg.completionTokens + " out tok (this model doesn't report cost)"
             : "usage: " +
-              formatCost(msg.requestCostUsd) +
-              " (" + msg.promptTokens + " in / " + msg.completionTokens + " out tok) · session total " +
-              formatCost(msg.sessionCostUsd);
+            formatCost(msg.requestCostUsd) +
+            " (" + msg.promptTokens + " in / " + msg.completionTokens + " out tok) · session total " +
+            formatCost(msg.sessionCostUsd);
         addMessage("cost", escapeHtml(perTurn));
         break;
       }
@@ -425,9 +494,15 @@
       send();
     }
   });
-  modelSelect.addEventListener("change", () =>
-    vscode.postMessage({ type: "selectModel", modelId: modelSelect.value })
-  );
+  modelSelect.addEventListener("change", () => {
+    vscode.postMessage({ type: "selectModel", modelId: modelSelect.value });
+    // Host resets currentReasoningEffort to null on every model switch —
+    // reflect that immediately rather than waiting on a round trip.
+    updateReasoningVisibility(modelSelect.value);
+  });
+  reasoningSelect.addEventListener("change", () => {
+    vscode.postMessage({ type: "selectReasoningEffort", value: reasoningSelect.value || null });
+  });
   $("new-session").addEventListener("click", () => {
     clearMessages();
     $("session-cost").textContent = formatCost(0);
@@ -488,6 +563,7 @@
     });
   });
 
+  populateReasoningOptions();
   renderPresetCards();
   addManualModelRow("", "");
 

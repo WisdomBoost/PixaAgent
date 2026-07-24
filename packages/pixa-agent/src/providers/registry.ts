@@ -19,6 +19,12 @@ export function loadModels(json: string): ModelEntry[] {
     if (typeof m.supportsTools !== "boolean") {
       throw new Error(`models.json: entry ${i} needs boolean "supportsTools"`);
     }
+    // Optional — absent means "unknown/unsupported", same convention as
+    // supportsTools defaulting via `!== false` elsewhere in this codebase,
+    // except here the safe default is false-ish (undefined), not true.
+    if (m.supportsReasoningEffort !== undefined && typeof m.supportsReasoningEffort !== "boolean") {
+      throw new Error(`models.json: entry ${i} has invalid "supportsReasoningEffort" (must be boolean if present)`);
+    }
     return {
       id: m.id as string,
       label: m.label as string,
@@ -26,6 +32,7 @@ export function loadModels(json: string): ModelEntry[] {
       slug: m.slug as string,
       contextWindow: m.contextWindow,
       supportsTools: m.supportsTools,
+      supportsReasoningEffort: typeof m.supportsReasoningEffort === "boolean" ? m.supportsReasoningEffort : undefined,
     };
   });
 }

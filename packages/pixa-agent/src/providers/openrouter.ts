@@ -8,6 +8,7 @@ import type {
   UsageInfo,
 } from "./types";
 import { RateLimitError, classifyRateLimit } from "./errors";
+import { DEFAULT_GATEWAY_URL } from "../config";
 
 const API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -114,20 +115,37 @@ export class OpenRouterProvider implements ModelProvider {
   private endpoint: string;
   private requiresApiKey: boolean;
   private displayName: string;
+  private gatewayUrl?: string;
 
+  /**
+   * @param getApiKey Resolves the user's OpenRouter API key from secret storage.
+   * @param opts Extra options for custom providers or gateway URL.
+   */
   constructor(
     private getApiKey: () => Promise<string | undefined>,
-    opts: { id?: string; endpoint?: string; requiresApiKey?: boolean; displayName?: string } = {}
+    opts: {
+      id?: string;
+      endpoint?: string;
+      requiresApiKey?: boolean;
+      displayName?: string;
+      gatewayUrl?: string;
+    } = {}
   ) {
     this.id = opts.id ?? "openrouter";
     this.endpoint = opts.endpoint ?? API_URL;
     this.requiresApiKey = opts.requiresApiKey !== false;
     this.displayName = opts.displayName ?? this.id;
+    this.gatewayUrl = opts.gatewayUrl;
+  }
+
+  /** Lets the extension point at a new gateway without recreating the provider (e.g. after changing `pixa.gatewayUrl`). */
+  setGatewayUrl(url: string): void {
+    this.gatewayUrl = url;
   }
 
   /** True when this client talks to OpenRouter itself (enables its extensions). */
   private get isOpenRouter(): boolean {
-    return this.endpoint === API_URL;
+    return this.id === "openrouter";
   }
 
   async chat(
@@ -135,11 +153,16 @@ export class OpenRouterProvider implements ModelProvider {
     onDelta: (d: StreamDelta) => void,
     signal: AbortSignal
   ): Promise<ChatResult> {
+    const url = this.gatewayUrl || (this.id === "openrouter" ? DEFAULT_GATEWAY_URL : this.endpoint);
     const apiKey = await this.getApiKey();
     if (!apiKey && this.requiresApiKey) {
-      throw new Error(
-        `No API key set for "${this.displayName}". Run "Pixa: Set Provider API Key" and choose ${this.id}.`
-      );
+      if (this.id === "openrouter") {
+        throw new Error('No OpenRouter API key set. Run "Pixa: Set OpenRouter API Key".');
+      } else {
+        throw new Error(
+          `No API key set for "${this.displayName}". Run "Pixa: Set Provider API Key" and choose ${this.id}.`
+        );
+      }
     }
 
     const body: Record<string, unknown> = {
@@ -150,31 +173,47 @@ export class OpenRouterProvider implements ModelProvider {
       max_tokens: req.maxTokens ?? 8192,
       tools: req.tools.length
         ? req.tools.map((t) => ({
-            type: "function",
-            function: { name: t.name, description: t.description, parameters: t.parameters },
-          }))
+          type: "function",
+          function: { name: t.name, description: t.description, parameters: t.parameters },
+        }))
         : undefined,
     };
     // Cost accounting is an OpenRouter extension; other OpenAI-compatible
     // servers may reject unknown fields, so only send it to OpenRouter.
     if (this.isOpenRouter) body.usage = { include: true };
+    // Reasoning-effort is likewise an OpenRouter-forwarded extension, and the
+    // caller (AgentLoop) only sets req.reasoningEffort when the resolved
+    // ModelEntry declared supportsReasoningEffort — so no default is sent and
+    // non-supporting models never see this field at all. OpenRouter's current
+    // schema nests it under `reasoning: { effort }` rather than a top-level
+    // `reasoning_effort` — reconfirm against their docs if requests start
+    // getting rejected, since this has changed shape before.
+    if (this.isOpenRouter && req.reasoningEffort) {
+      body.reasoning = { effort: req.reasoningEffort };
+    }
 
-    // Combine the caller's abort signal with a 30-second connect timeout so a
-    // slow or hung external host never blocks the UI indefinitely.
+    // Combine the caller's abort signal with a connect timeout so a slow or
+    // hung external host never blocks the UI indefinitely. 90s — large free-tier
+    // models are commonly queued and can take well over 30s to start responding.
+    const CONNECT_TIMEOUT_MS = 90_000;
     const timeoutController = new AbortController();
-    const timeoutId = setTimeout(() => timeoutController.abort(), 30_000);
+    const timeoutId = setTimeout(() => timeoutController.abort(), CONNECT_TIMEOUT_MS);
     const combinedSignal = AbortSignal.any
       ? AbortSignal.any([signal, timeoutController.signal])
       : (() => {
-          const c = new AbortController();
-          signal.addEventListener("abort", () => c.abort(signal.reason), { once: true });
-          timeoutController.signal.addEventListener("abort", () => c.abort(new Error("Request timed out after 30s — the provider is not responding")), { once: true });
-          return c.signal;
-        })();
+        const c = new AbortController();
+        signal.addEventListener("abort", () => c.abort(signal.reason), { once: true });
+        timeoutController.signal.addEventListener(
+          "abort",
+          () => c.abort(new Error(`Request timed out after ${CONNECT_TIMEOUT_MS / 1000}s — the provider is not responding`)),
+          { once: true }
+        );
+        return c.signal;
+      })();
 
     let res: Response;
     try {
-      res = await fetch(this.endpoint, {
+      res = await fetch(url, {
         method: "POST",
         signal: combinedSignal,
         headers: {
@@ -186,6 +225,20 @@ export class OpenRouterProvider implements ModelProvider {
         },
         body: JSON.stringify(body),
       });
+    } catch (err: unknown) {
+      // User hit Stop (or switched session) — propagate as AbortError so the
+      // loop shows "Stopped." rather than a fake network failure.
+      if (signal.aborted) throw err;
+      // Connect timeout — OpenRouter/gateway never returned headers in time.
+      // Must NOT look like an AbortError: isAbort used to match any message
+      // containing "aborted", which made timeouts display as "Stopped."
+      if (timeoutController.signal.aborted) {
+        throw new Error(
+          `Request timed out after ${CONNECT_TIMEOUT_MS / 1000}s waiting for a response. Free-tier models are often queued — try a smaller/paid model, or wait and retry.`
+        );
+      }
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(`Could not reach the AI service (${detail}). Please try again in a moment.`);
     } finally {
       // Once we have the response (or an error), the connect phase is done;
       // cancel the connect timeout so it doesn't fire during the streaming phase.
@@ -214,7 +267,7 @@ export class OpenRouterProvider implements ModelProvider {
     let usage: UsageInfo | null = null;
     const toolAcc: ToolCallAccumulator = {};
 
-    for (;;) {
+    for (; ;) {
       // Respect abort between chunks so Stop takes effect immediately even
       // if the server keeps the connection open.
       if (signal.aborted) {
